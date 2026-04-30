@@ -20,7 +20,11 @@ const app = express();
 app.use(cors({
   origin: function (origin, callback) {
     // Permitir cualquier puerto local o sin origin (como requests directos)
-    if (!origin || origin.startsWith('http://localhost:')) {
+    const allowedOrigins = [
+      'https://uniformespro.vercel.app',
+      'https://uniformespro.vercel.app/'
+    ];
+    if (!origin || origin.startsWith('http://localhost:') || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('No permitido por CORS'));
