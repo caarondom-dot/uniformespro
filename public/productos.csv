@@ -1,0 +1,9 @@
+id,name,category,price,sizes,images,rating,description
+1,Camisa blanca M/Larga,Camisa,189,4;6;8;10;12;14;16;18,/Camisa modelo.png;/Camisa frente.jpeg;/Camisa lado.jpeg;/Camisa espalda.jpeg;/Camisa empaque.jpeg,4.8,Camisa blanca manga larga de vestir.
+2,Pants Sportock Azul Marino ,Educacion Fisica,229,4;6;8;10;12;14;16,/Azul marino modelo.png;/Azul marino frente.jpg;/Azul marino lado.jpg;/Azul marino espalda.jpg;/Azul interior.jpg,4.9,Tela tecnológica transpirable. Diseño ergonómico para mayor libertad de movimiento.
+3,Pants Sportock Bicolor,Educaci�n Fisica,249,4;6;8;10;12;14;16,/Bicolor modelo.png;/Bicolor perfil.jpg;/Bicolor lado.jpg;/Bicolor espalda.jpg;/Azul interior.jpg,5,Tela tecnológica transpirable. Diseño ergonómico para mayor libertad de movimiento.
+4,Pants Sportock Rojo,Educaci�n Fisica,229,4;6;8;10;12;14;16,/Rojo modelo.jpg;/Rojo frente.jpg;/Rojo lado.jpg;/Rojo esplada.jpg;/Rojo interior.jpg,4.7,Tela tecnológica transpirable. Diseño ergonómico para mayor libertad de movimiento.
+5,Pantalon de Pants Sportock Bicolor,Educaci�n Fisica,119,6;8;10;12;14;16,/pprbi lado.jpeg;/pprbi costado.jpeg;/pprbi frente.jpeg,4.8,Tela tecnológica transpirable. Diseño ergonómico para mayor libertad de movimiento.
+6,Playera polo escolar blanca,Playera,159,4;6;8;10;12;14;16,/pn modelo.png;/pn frente.jpeg;/pn lado.jpeg;/pn espalda.jpeg,4.8,Tela pique fresca y duradera.
+7,Playera polo escolar bicolor,Playera,179,4;6;8;10;12;14;16,/plbimodelo.png;/plbifrente.jpeg;/plbilado.jpeg;/plbiespalda.jpeg;/plbicuello.jpeg,4.9,Tela pique fresca y duradera con cuello bicolor.
+8,Playera polo escolar tecnica,Playera,199,12;14;16;32;34;36;38;40,/plocmodelo.png;/plocfrente.jpeg;/plocespalda.jpeg;/ploccuello.jpeg,4.8,"Tela fresca y duradera con cuello pata de gallo caf�, para secundaria tecnica."

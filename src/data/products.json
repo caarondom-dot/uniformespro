@@ -1,0 +1,90 @@
+[
+  {
+    "id": 1,
+    "name": "Polo Oficial Premium",
+    "category": "Básico Escolar",
+    "price": 599,
+    "sizes": [
+      "6",
+      "8",
+      "10",
+      "12",
+      "14"
+    ],
+    "images": [
+      "/polo.png",
+      "/hero.png"
+    ],
+    "rating": 4.8,
+    "description": "Polo de algodón pima con cuello reforzado y costuras dobles."
+  },
+  {
+    "id": 2,
+    "name": "Suéter de Punto Navy",
+    "category": "Invierno",
+    "price": 850,
+    "sizes": [
+      "S",
+      "M",
+      "L",
+      "XL"
+    ],
+    "images": [
+      "/sweater.png",
+      "/hero.png"
+    ],
+    "rating": 4.9,
+    "description": "Suéter tejido de alta densidad, resistente al pilling."
+  },
+  {
+    "id": 3,
+    "name": "Pants sportock bicolor",
+    "category": "Educación Física",
+    "price": 229,
+    "sizes": [
+      "4",
+      "6",
+      "8",
+      "10",
+      "12",
+      "14",
+      "16"
+    ],
+    "images": [
+      "/Bicolor modelo.png",
+      "/Bicolor frente.jpg",
+      "/Bicolor perfil.jpg",
+      "/Bicolor lado.jpg",
+      "/Bicolor espalda.jpg",
+      "/Azul interior.jpg"
+    ],
+    "rating": 5.0,
+    "description": "Tela tecnológica transpirable, ideal para actividades intensas."
+  },
+  {
+    "id": 4,
+    "name": "Camisa M/Larga Blanca",
+    "category": "Básico Escolar",
+    "price": 199,
+    "sizes": [
+      "4",
+      "6",
+      "8",
+      "10",
+      "12",
+      "14",
+      "16",
+      "18"
+    ],
+    "images": [
+      "/Camisa modelo.png",
+      "/Camisa frente.jpeg",
+      "/Camisa espalda.jpeg",
+      "/Camisa Perfil.jpeg",
+      "/Camisa lado.jpeg",
+      "/Camisa empaque.jpeg"
+    ],
+    "rating": 4.8,
+    "description": "Camisa manga larga ideal para actividades académicas."
+  }
+]
