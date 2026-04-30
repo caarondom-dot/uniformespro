@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, X, Plus, Minus, ShoppingBag, ChevronRight, Star, MessageCircle, Ruler, Shield, LayoutDashboard } from 'lucide-react';
+import { ShoppingCart, X, Plus, Minus, ShoppingBag, ChevronRight, Star, MessageCircle, Ruler, Shield, LayoutDashboard, CheckCircle } from 'lucide-react';
 import Papa from 'papaparse';
+import confetti from 'canvas-confetti';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
@@ -555,7 +556,12 @@ function App() {
       const result = await response.json();
 
       if (response.ok) {
-        alert("¡Pedido registrado en Firebase!");
+        confetti({
+          particleCount: 150,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#EAB308', '#0F172A', '#22C55E']
+        });
         const updatedOrders = [newOrder, ...orders];
         setOrders(updatedOrders);
         localStorage.setItem('uniformespro_orders', JSON.stringify(updatedOrders));
@@ -803,11 +809,47 @@ function App() {
 
                 {checkoutStep === 'success' && (
                   <div className="success-view">
-                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="success-icon">✅</motion.div>
-                    <h3>¡Pedido Confirmado!</h3>
-                    <p>Gracias por tu compra en <strong>UniformesPro.mx</strong>.</p>
-                    <p>Hemos enviado un correo a <strong>{shippingInfo.email}</strong> con los detalles de tu guía de seguimiento.</p>
-                    <button className="btn-primary" onClick={() => { setIsCartOpen(false); setCheckoutStep('cart'); setCart([]); }}>Regresar al Inicio</button>
+                    <motion.div 
+                      initial={{ scale: 0, rotate: -45 }} 
+                      animate={{ scale: 1, rotate: 0 }} 
+                      transition={{ type: "spring", damping: 12, stiffness: 200 }}
+                      className="success-icon-wrapper"
+                    >
+                      <CheckCircle size={80} strokeWidth={1.5} />
+                    </motion.div>
+                    
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                    >
+                      <h3>¡Pago Exitoso!</h3>
+                      <p className="success-p">Gracias por tu confianza en <strong>UniformesPro</strong>.</p>
+                      
+                      <div className="success-details-card">
+                        <div className="detail-row">
+                          <span>Correo:</span>
+                          <strong>{shippingInfo.email}</strong>
+                        </div>
+                        <div className="detail-row">
+                          <span>Envío:</span>
+                          <strong>{selectedRate?.carrier} ({selectedRate?.time})</strong>
+                        </div>
+                      </div>
+
+                      <p className="success-notice">Recibirás un correo con tu número de guía en breve.</p>
+                      
+                      <button 
+                        className="btn-checkout btn-success-back" 
+                        onClick={() => { 
+                          setIsCartOpen(false); 
+                          setCheckoutStep('cart'); 
+                          setCart([]); 
+                        }}
+                      >
+                        Seguir Comprando
+                      </button>
+                    </motion.div>
                   </div>
                 )}
               </div>
