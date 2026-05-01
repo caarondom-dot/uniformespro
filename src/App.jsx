@@ -1409,14 +1409,19 @@ function App() {
                     </div>
                     <div className="form-group" style={{flex: 1}}>
                       <label>Categoría</label>
-                      <select value={editingProduct.category} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})} style={{width: '100%', padding: '0.8rem', border: '1px solid #E2E8F0', borderRadius: '8px', background: 'white'}}>
-                        <option value="">Seleccionar...</option>
-                        <option value="Industrial">Industrial</option>
-                        <option value="Ejecutivo">Ejecutivo</option>
-                        <option value="Médico">Médico</option>
-                        <option value="Hostelería">Hostelería</option>
-                        <option value="Casual">Casual</option>
-                      </select>
+                      <input 
+                        list="category-options" 
+                        required 
+                        value={editingProduct.category} 
+                        onChange={e => setEditingProduct({...editingProduct, category: e.target.value})} 
+                        style={{width: '100%', padding: '0.8rem', border: '1px solid #E2E8F0', borderRadius: '8px', background: 'white'}} 
+                        placeholder="Ej. Camisas, Pantalones..."
+                      />
+                      <datalist id="category-options">
+                        {Array.from(new Set(products.map(p => p.category))).filter(Boolean).map(cat => (
+                          <option key={cat} value={cat} />
+                        ))}
+                      </datalist>
                     </div>
                   </div>
                   
