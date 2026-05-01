@@ -14,12 +14,14 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
+// Limpiar variables de entorno de posibles comillas
+const CLIENT_ID = (process.env.SKYDROPX_CLIENT_ID || "").trim().replace(/^"|"$/g, '');
+const CLIENT_SECRET = (process.env.SKYDROPX_CLIENT_SECRET || "").trim().replace(/^"|"$/g, '');
+
 const app = express();
 
-// Habilitar CORS para que el frontend pueda hablar con el servidor
 app.use(cors({
   origin: function (origin, callback) {
-    // Permitir cualquier puerto local o sin origin (como requests directos)
     const allowedOrigins = [
       'https://uniformespro.vercel.app',
       'https://uniformespro.vercel.app/'
@@ -35,7 +37,6 @@ app.use(cors({
 
 app.use(express.json());
 
-// Configuración de Firebase
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY,
   authDomain: process.env.FIREBASE_AUTH_DOMAIN,
@@ -46,234 +47,219 @@ const firebaseConfig = {
   measurementId: process.env.FIREBASE_MEASUREMENT_ID
 };
 
-// Inicializar Firebase
 const firebaseApp = initializeApp(firebaseConfig);
-// Usar el ID de base de datos del .env (importante si no es "(default)")
 const db = getFirestore(firebaseApp, process.env.FIREBASE_DATABASE_ID || '(default)');
-
-// Inicializar Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
+// --- UTILIDADES SKYDROPX PRO ---
+let cachedToken = null;
+let tokenExpiry = 0;
+
+async function getSkydropxToken() {
+  if (cachedToken && Date.now() < (tokenExpiry - 60000)) {
+    return cachedToken;
+  }
+
+  try {
+    console.log("Intentando obtener nuevo token de Skydropx PRO...");
+    console.log(`Usando CLIENT_ID: ${CLIENT_ID}`);
+    // Log seguro del secret
+    console.log(`CLIENT_SECRET empieza con: ${CLIENT_SECRET.substring(0, 4)}...`);
+
+    const params = new URLSearchParams();
+    params.append('grant_type', 'client_credentials');
+    params.append('client_id', CLIENT_ID);
+    params.append('client_secret', CLIENT_SECRET);
+
+    // Probamos con la URL estándar de PRO v1 (según docs)
+    const response = await fetch('https://api-pro.skydropx.com/api/v1/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: "client_credentials",
+        client_id: CLIENT_ID,
+        client_secret: CLIENT_SECRET
+      })
+    });
+
+    console.log(`Respuesta OAuth Status: ${response.status} ${response.statusText}`);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Error en respuesta OAuth:", errorText.substring(0, 200));
+      return null;
+    }
+
+    const data = await response.json();
+    cachedToken = data.access_token;
+    tokenExpiry = Date.now() + (data.expires_in * 1000);
+    console.log("✅ Nuevo token Skydropx PRO generado correctamente.");
+    return cachedToken;
+  } catch (error) {
+    console.error("❌ Error crítico obteniendo token Skydropx:", error.message);
+    return null;
+  }
+}
+
+function getStateByZipCode(cp) {
+  const zip = parseInt(cp);
+  if (zip >= 1000 && zip <= 19999) return "Ciudad de México";
+  if (zip >= 20000 && zip <= 29999) return "Aguascalientes";
+  if (zip >= 30000 && zip <= 33999) return "Chihuahua";
+  if (zip >= 34000 && zip <= 38999) return "Durango";
+  if (zip >= 39000 && zip <= 41999) return "Guerrero";
+  if (zip >= 42000 && zip <= 43999) return "Hidalgo";
+  if (zip >= 44000 && zip <= 49999) return "Jalisco";
+  if (zip >= 50000 && zip <= 57999) return "Estado de México";
+  if (zip >= 58000 && zip <= 61999) return "Michoacán";
+  if (zip >= 62000 && zip <= 62999) return "Morelos";
+  if (zip >= 63000 && zip <= 63999) return "Nayarit";
+  if (zip >= 64000 && zip <= 67999) return "Nuevo León";
+  if (zip >= 68000 && zip <= 71999) return "Oaxaca";
+  if (zip >= 72000 && zip <= 75999) return "Puebla";
+  if (zip >= 76000 && zip <= 76999) return "Querétaro";
+  if (zip >= 77000 && zip <= 77999) return "Quintana Roo";
+  if (zip >= 78000 && zip <= 79999) return "San Luis Potosí";
+  if (zip >= 80000 && zip <= 82999) return "Sinaloa";
+  if (zip >= 83000 && zip <= 85999) return "Sonora";
+  if (zip >= 86000 && zip <= 86999) return "Tabasco";
+  if (zip >= 87000 && zip <= 89999) return "Tamaulipas";
+  if (zip >= 90000 && zip <= 90999) return "Tlaxcala";
+  if (zip >= 91000 && zip <= 96999) return "Veracruz";
+  if (zip >= 97000 && zip <= 97999) return "Yucatán";
+  if (zip >= 98000 && zip <= 99999) return "Zacatecas";
+  return "Ciudad de México"; // Fallback general
+}
+
+// --- ENDPOINTS ---
 
 app.post('/api/create-payment-intent', async (req, res) => {
   try {
     const { items, shipping } = req.body;
+    if (!items || items.length === 0) return res.status(400).json({ error: 'Carrito vacío' });
 
-    if (!items || items.length === 0) {
-      return res.status(400).json({ error: 'El carrito está vacío' });
-    }
-
-    // Calcular el total en el servidor para mayor seguridad (en centavos para Stripe)
     const calculateOrderAmount = (cartItems, shippingInfo) => {
-      // Cargar base de datos (CSV)
       const csvFilePath = path.resolve(__dirname, 'public', 'productos.csv');
       const csvFile = fs.readFileSync(csvFilePath, 'utf8');
       const results = Papa.parse(csvFile, { header: true, skipEmptyLines: true });
-      const dbProducts = results.data.map(row => ({
-        id: parseInt(row.id),
-        price: parseFloat(row.price)
-      }));
-
-      // Calcular subtotal usando los precios reales
+      const dbProducts = results.data.map(row => ({ id: parseInt(row.id), price: parseFloat(row.price) }));
       const subtotal = cartItems.reduce((acc, item) => {
         const dbProduct = dbProducts.find(p => p.id === item.id);
-        const realPrice = dbProduct ? dbProduct.price : 0;
-        if (!dbProduct) console.warn(`Producto no encontrado en BD: ${item.id}`);
-        return acc + (realPrice * item.quantity);
+        return acc + ((dbProduct ? dbProduct.price : 0) * item.quantity);
       }, 0);
-
       const shippingPrice = shippingInfo && shippingInfo.rate ? shippingInfo.rate.price : 0;
-      // Stripe requiere el monto en la unidad mínima de la moneda (centavos para MXN)
       return Math.round((subtotal + shippingPrice) * 100);
     };
 
     const amount = calculateOrderAmount(items, shipping);
-
-    if (amount <= 0) {
-      return res.status(400).json({ error: 'El monto del pedido debe ser mayor a cero' });
-    }
-
-    // Crear un PaymentIntent con el monto y la moneda
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amount,
+      amount,
       currency: 'mxn',
-      automatic_payment_methods: {
-        enabled: true,
-      },
-      metadata: {
-        order_id: `ORD-${Date.now()}`,
-        customer_name: shipping?.nombre || 'Cliente',
-        customer_email: shipping?.email || 'sin-email@ejemplo.com'
-      }
+      automatic_payment_methods: { enabled: true },
+      metadata: { order_id: `ORD-${Date.now()}` }
     });
-
-    res.send({
-      clientSecret: paymentIntent.client_secret,
-    });
+    res.send({ clientSecret: paymentIntent.client_secret });
   } catch (error) {
-    console.error('Error creando Payment Intent:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.post('/api/shipping-rates', async (req, res) => {
-  const { zipCode, totalItems, shippingInfo } = req.body;
-  if (!zipCode || zipCode.length < 5) {
-    return res.status(400).json({ error: 'Código postal inválido' });
-  }
+  const { zipCode, totalItems } = req.body;
+  console.log(`\n--- COTIZACIÓN CP: ${zipCode} | Artículos: ${totalItems || 1} ---`);
 
-  const CLIENT_ID = process.env.SKYDROPX_CLIENT_ID;
-  const CLIENT_SECRET = process.env.SKYDROPX_CLIENT_SECRET;
-  
   try {
-    let SKYDROPX_TOKEN = "";
-    
-    try {
-      let tokenRes = await fetch('https://api-pro.skydropx.com/api/v1/oauth/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grant_type: 'client_credentials', client_id: CLIENT_ID, client_secret: CLIENT_SECRET })
-      });
-      if (!tokenRes.ok) {
-        tokenRes = await fetch('https://api.skydropx.com/oauth/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ grant_type: 'client_credentials', client_id: CLIENT_ID, client_secret: CLIENT_SECRET })
-        });
-      }
-      if (tokenRes.ok) {
-        const tokenData = await tokenRes.json();
-        SKYDROPX_TOKEN = tokenData.access_token;
-      }
-    } catch (e) {
-      console.error("Error de red al obtener el token OAuth:", e);
-    }
+    const stateInfo = getStateByZipCode(zipCode);
+    const token = await getSkydropxToken();
+    if (!token) throw new Error("Token no disponible");
 
-    if (!SKYDROPX_TOKEN) SKYDROPX_TOKEN = CLIENT_ID;
+    // Calculamos un peso aproximado (0.5kg por artículo, mínimo 1kg)
+    const totalWeight = Math.max(1, (totalItems || 1) * 0.5);
 
-    const estimatedWeight = Math.max(1, totalItems * 0.5); // 500g por prenda
-    const boxDimension = Math.max(10, Math.ceil(10 * Math.pow(totalItems, 1 / 3)));
-
-    let realRates = [];
-
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos de espera máximo
-
+    const fetchRates = async () => {
       const response = await fetch('https://api-pro.skydropx.com/api/v1/quotations', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${SKYDROPX_TOKEN}`, 'Content-Type': 'application/json' },
-        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           quotation: {
-            address_from: { country_code: "MX", postal_code: "45239", area_level1: "Jalisco", area_level2: "Zapopan", area_level3: "Tesistán" },
-            address_to: { country_code: "MX", postal_code: zipCode, area_level1: shippingInfo.estado, area_level2: shippingInfo.ciudad, area_level3: "Centro" },
-            parcels: [{ length: boxDimension, width: boxDimension, height: boxDimension, weight: estimatedWeight, package_protected: false, declared_value: 100 * totalItems }]
+            address_from: { country_code: "MX", postal_code: "45239", area_level1: "Jalisco", area_level2: "Zapopan", area_level3: "Tesistán", address_line1: "Tesistán" },
+            address_to: { country_code: "MX", postal_code: zipCode, area_level1: stateInfo, area_level2: stateInfo, area_level3: "Centro", address_line1: "Centro" },
+            parcels: [{ length: 15, width: 15, height: 15, weight: totalWeight, package_protected: false, declared_value: 500 }]
           }
         })
       });
-      clearTimeout(timeoutId);
+      return await response.json();
+    };
 
-      if (response.ok) {
-        const data = await response.json();
-        realRates = (data.rates || []).filter(rate => rate.success && rate.total).map((rate, index) => ({
-          id: `sk_pro_${index}_${rate.id}`, carrier: rate.provider_display_name, service: rate.provider_service_name, price: parseFloat(rate.total), time: `${rate.days} días`
-        }));
-      } else {
-        throw new Error("Fallo Skydropx Pro");
-      }
-    } catch (proError) {
-      console.log("Pro falló, intentando estándar...");
-      const responseStd = await fetch('https://api.skydropx.com/v1/quotations', {
-        method: 'POST',
-        headers: { 'Authorization': `Token token=${SKYDROPX_TOKEN}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          zip_from: "45239", zip_to: zipCode,
-          parcels: [{ weight: estimatedWeight, height: boxDimension, width: boxDimension, length: boxDimension }]
-        })
-      });
-      if (responseStd.ok) {
-        const dataStd = await responseStd.json();
-        const apiRates = dataStd.rates || (dataStd.data && dataStd.data.attributes && dataStd.data.attributes.rates) || [];
-        realRates = apiRates.map((rate, index) => ({
-          id: `sk_std_${index}_${rate.id}`, carrier: rate.provider || rate.carrier || "Mensajería", service: rate.service_level_name || rate.service_name || "Estándar", price: parseFloat(rate.total_pricing || rate.amount || rate.total), time: `${rate.days || 3} días`
-        }));
-      } else {
-        throw new Error("Ambas APIs de Skydropx fallaron");
-      }
-    }
-
-    let filteredRealRates = realRates.filter(rate => {
-      const c = rate.carrier.toLowerCase();
-      return c.includes('estafeta') || c.includes('fedex') || c.includes('dhl');
-    });
-
-    if (filteredRealRates.length === 0 && realRates.length > 0) filteredRealRates = realRates;
-
-    const validRates = filteredRealRates.sort((a, b) => a.price - b.price);
+    let data = await fetchRates();
     
-    if (validRates.length > 0) {
-      return res.json({ rates: validRates });
-    } else {
-      throw new Error("No se obtuvieron tarifas válidas");
+    // Sistema de reintentos más persistente (hasta 3 intentos con pausa de 2s)
+    let attempts = 1;
+    const maxAttempts = 3;
+    
+    while (attempts < maxAttempts && 
+           ((!data.rates || data.rates.length === 0) || 
+            (data.rates && data.rates.every(r => !r.success)))) {
+      console.log(`⏳ Intento ${attempts}/${maxAttempts} fallido. Reintentando en 2s...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      data = await fetchRates();
+      attempts++;
     }
+
+    let rates = [];
+    if (data && data.rates) {
+      const allowedCarriers = ['dhl', 'fedex', 'estafeta'];
+      
+      rates = data.rates
+        .filter(r => {
+          const carrier = (r.provider_name || "").toLowerCase();
+          return r.success && 
+                 parseFloat(r.total) > 0 && 
+                 allowedCarriers.some(c => carrier.includes(c));
+        })
+        .map(r => ({
+          id: r.id,
+          carrier: r.provider_display_name || r.provider_name,
+          service: r.provider_service_name || "Estándar",
+          price: parseFloat(r.total),
+          time: r.days ? `${r.days} días` : '3-5 días'
+        }))
+        .sort((a, b) => a.price - b.price); // Ordenar de menor a mayor
+    }
+
+    if (rates.length > 0) {
+      console.log(`✅ ${rates.length} tarifas filtradas y ordenadas obtenidas.`);
+      return res.json({ success: true, rates });
+    }
+    
+    throw new Error("No se encontraron tarifas para DHL, FedEx o Estafeta en esta zona.");
+
   } catch (error) {
-    console.error("Usando tarifas simuladas:", error.message);
-    const mockRates = [
-      { id: 'sk_1', carrier: 'Estafeta', service: 'Terrestre', price: 139, time: '3-5 días' },
-      { id: 'sk_2', carrier: 'FedEx', service: 'Económico', price: 155, time: '2-4 días' },
-      { id: 'sk_3', carrier: 'DHL', service: 'Express', price: 210, time: '1-2 días' }
-    ];
-    return res.json({ rates: mockRates, isMock: true });
+    console.error("❌ FALLBACK:", error.message);
+    res.json({
+      success: false,
+      message: error.message,
+      rates: [
+        { id: 'def_1', carrier: 'Estafeta', service: 'Terrestre (Default)', price: 145, time: '3-5 días' },
+        { id: 'def_2', carrier: 'FedEx', service: 'Económico (Default)', price: 160, time: '2-4 días' },
+        { id: 'def_3', carrier: 'DHL', service: 'Express (Default)', price: 220, time: '1-2 días' }
+      ]
+    });
   }
 });
 
-// Endpoint para guardar el pedido en Firebase DESPUÉS del pago exitoso
 app.post('/api/confirm-order', async (req, res) => {
-  console.log("-----------------------------------------");
-  console.log("1. PETICIÓN RECIBIDA EN /api/confirm-order");
-  
-  const { orderDetails } = req.body;
-  const origin = req.get('origin');
-  console.log(`Petición desde origin: ${origin}`);
-
-  if (!orderDetails) {
-    console.log("Error: No se recibieron detalles del pedido");
-    return res.status(400).json({ error: 'Faltan detalles del pedido' });
-  }
-
-  console.log("2. INTENTANDO GUARDAR PEDIDO:", orderDetails.id);
-
   try {
-    // Timeout de seguridad para Firebase (10 segundos)
-    const firebasePromise = addDoc(collection(db, "pedidos"), {
-      ...orderDetails,
-      createdAt: new Date(),
-      serverTimestamp: new Date().toISOString()
-    });
-
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Firebase Timeout')), 10000)
-    );
-
-    const docRef = await Promise.race([firebasePromise, timeoutPromise]);
-    
-    console.log("3. PEDIDO GUARDADO EXITOSAMENTE. ID:", docRef.id);
-    return res.status(200).json({ success: true, id: docRef.id });
-
+    const { orderDetails } = req.body;
+    const docRef = await addDoc(collection(db, "pedidos"), { ...orderDetails, createdAt: new Date() });
+    res.status(200).json({ success: true, id: docRef.id });
   } catch (error) {
-    console.error("❌ ERROR CRÍTICO EN FIREBASE:");
-    console.error("Mensaje:", error.message);
-    console.error("Código:", error.code);
-    console.error("Stack:", error.stack);
-    
-    return res.status(500).json({ 
-      error: 'Error al persistir en base de datos', 
-      message: error.message,
-      code: error.code
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Servidor de pagos corriendo en puerto ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Servidor en puerto ${PORT}`));

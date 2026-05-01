@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, X, Plus, Minus, ShoppingBag, ChevronRight, Star, MessageCircle, Ruler, Shield, LayoutDashboard, CheckCircle } from 'lucide-react';
+import { ShoppingCart, X, Plus, Minus, ShoppingBag, ChevronRight, Star, MessageCircle, Ruler, Shield, LayoutDashboard, CheckCircle, AlertCircle } from 'lucide-react';
 import Papa from 'papaparse';
 import confetti from 'canvas-confetti';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_PonAquiTuClavePublicaDeStripe');
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://uniformespro-backend.onrender.com';
+
 
 
 import productsData from './data/products.json';
@@ -348,11 +351,41 @@ function App() {
   });
   const [clientSecret, setClientSecret] = useState('');
   const [isFetchingSecret, setIsFetchingSecret] = useState(false);
+  const [validationError, setValidationError] = useState('');
+
+  const validateShipping = () => {
+    setValidationError('');
+    const { nombre, email, telefono, direccion, ciudad, cp, estado } = shippingInfo;
+    if (!nombre || !email || !telefono || !direccion || !ciudad || !cp || !estado) {
+      setValidationError("Completa todos los campos de envío.");
+      return false;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setValidationError("Correo electrónico no válido.");
+      return false;
+    }
+    if (telefono.length < 10) {
+      setValidationError("El teléfono debe tener 10 dígitos.");
+      return false;
+    }
+    if (!selectedRate) {
+      setValidationError("Selecciona un método de envío.");
+      return false;
+    }
+    return true;
+  };
+
+  const handleShippingChange = (field, value) => {
+    setShippingInfo(prev => ({ ...prev, [field]: value }));
+    if (validationError) setValidationError('');
+  };
 
   const handleGoToPayment = async () => {
     if (cart.length === 0) return;
+    if (!validateShipping()) return;
+    
     setIsFetchingSecret(true);
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
     try {
       const res = await fetch(`${API_BASE_URL}/api/create-payment-intent`, {
         method: 'POST',
@@ -371,7 +404,7 @@ function App() {
       }
     } catch (err) {
       console.error(err);
-      alert('Error de red al conectar con el servidor de pagos.');
+      setValidationError('Error de red al conectar con el servidor. Verifica que el servidor esté encendido.');
     } finally {
       setIsFetchingSecret(false);
     }
@@ -397,6 +430,27 @@ function App() {
         setProducts(formatted);
       }
     });
+  }, []);
+
+  // Manejar el regreso de Stripe después de un redireccionamiento (ej. 3D Secure)
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const paymentIntentId = query.get("payment_intent");
+    const status = query.get("redirect_status");
+
+    if (paymentIntentId && status === "succeeded") {
+      // Si venimos de un pago exitoso que requirió redirección
+      setCheckoutStep('success');
+      setIsCartOpen(true);
+      confetti({
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#EAB308', '#0F172A', '#22C55E']
+      });
+      // Limpiar URL
+      window.history.replaceState({}, document.title, "/");
+    }
   }, []);
 
   const addToCart = (product, size) => {
@@ -425,6 +479,15 @@ function App() {
       return item;
     }));
   };
+
+  // Recalcular envío automáticamente cuando cambie la cantidad de artículos
+  useEffect(() => {
+    const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
+    if (shippingInfo.cp && shippingInfo.cp.length === 5 && totalQty > 0) {
+      console.log("Recalculando envío por cambio en carrito...");
+      fetchShippingRates(shippingInfo.cp);
+    }
+  }, [cart.map(item => item.quantity).join(',')]); // Se activa cuando cambian las cantidades
 
   const getStateByZipCode = (zip) => {
     const prefix = parseInt(zip.substring(0, 2));
@@ -467,22 +530,35 @@ function App() {
     setIsFetchingRates(true);
     
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-      const res = await fetch(`${API_BASE_URL}/api/shipping-rates`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          zipCode, 
-          totalItems, 
-          shippingInfo: {
-            ...shippingInfo,
-            estado: shippingInfo.estado || getStateByZipCode(zipCode),
-            ciudad: shippingInfo.ciudad || getStateByZipCode(zipCode)
-          } 
-        })
-      });
-      const data = await res.json();
+      
+      const performFetch = async () => {
+        const res = await fetch(`${API_BASE_URL}/api/shipping-rates`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            zipCode, 
+            totalItems, 
+            shippingInfo: {
+              ...shippingInfo,
+              estado: shippingInfo.estado || getStateByZipCode(zipCode),
+              ciudad: shippingInfo.ciudad || getStateByZipCode(zipCode)
+            } 
+          })
+        });
+        return await res.json();
+      };
+
+      let data = await performFetch();
+      
+      // Si el backend falló (devolvió el fallback), intentamos UNA vez más desde el frontend
+      // dándole otros 3 segundos de margen.
+      if (!data.success) {
+        console.log("Backend devolvió fallback, reintentando desde frontend en 3s...");
+        await new Promise(r => setTimeout(r, 3000));
+        data = await performFetch();
+      }
+
       if (data.rates && data.rates.length > 0) {
         setShippingRates(data.rates);
         setSelectedRate(data.rates[0]);
@@ -491,11 +567,11 @@ function App() {
       }
     } catch (error) {
       console.log("Error al obtener tarifas:", error.message);
-      // Fallback local en caso de error de red
+      // Solo mostramos el fallback manual si tras todos los reintentos (backend + frontend) seguimos sin nada real
       const mockRates = [
-        { id: 'sk_1', carrier: 'Estafeta', service: 'Terrestre', price: 139, time: '3-5 días' },
-        { id: 'sk_2', carrier: 'FedEx', service: 'Económico', price: 155, time: '2-4 días' },
-        { id: 'sk_3', carrier: 'DHL', service: 'Express', price: 210, time: '1-2 días' }
+        { id: 'def_1', carrier: 'Estafeta', service: 'Terrestre (Default)', price: 145, time: '3-5 días' },
+        { id: 'def_2', carrier: 'FedEx', service: 'Económico (Default)', price: 160, time: '2-4 días' },
+        { id: 'def_3', carrier: 'DHL', service: 'Express (Default)', price: 220, time: '1-2 días' }
       ];
       setShippingRates(mockRates);
       setSelectedRate(mockRates[0]);
@@ -507,13 +583,17 @@ function App() {
   const handleCPChange = (e) => {
     const val = e.target.value.replace(/\D/g, '').slice(0, 5);
     
-    // Actualizamos el CP de inmediato en cualquier tecla
     setShippingInfo(prev => {
       const newInfo = { ...prev, cp: val };
       if (val.length === 5) {
         const resolvedState = getStateByZipCode(val);
-        newInfo.estado = prev.estado || resolvedState;
-        newInfo.ciudad = prev.ciudad || resolvedState;
+        // Si tiene 5 dígitos, actualizamos ciudad y estado
+        newInfo.estado = resolvedState;
+        newInfo.ciudad = resolvedState;
+      } else {
+        // Si borra o está incompleto, limpiamos para evitar errores
+        newInfo.estado = '';
+        newInfo.ciudad = '';
       }
       return newInfo;
     });
@@ -521,9 +601,11 @@ function App() {
     if (val.length === 5) {
       fetchShippingRates(val);
     } else {
+      // Reiniciar cotización si se borra el CP
       setShippingRates([]);
       setSelectedRate(null);
     }
+    if (validationError) setValidationError('');
   };
 
   const handlePaymentSuccess = async () => {
@@ -544,8 +626,6 @@ function App() {
 
     try {
       console.log("Enviando a Firebase via Backend...");
-      // Usar variable de entorno para la API o localhost por defecto
-      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       
       const response = await fetch(`${API_BASE_URL}/api/confirm-order`, {
         method: 'POST',
@@ -753,37 +833,46 @@ function App() {
 
                 {checkoutStep === 'shipping' && (
                   <div className="checkout-form">
-                    <input type="text" placeholder="Nombre completo" value={shippingInfo.nombre} onChange={e => setShippingInfo({...shippingInfo, nombre: e.target.value})} />
-                    <input type="email" placeholder="Correo electrónico" value={shippingInfo.email} onChange={e => setShippingInfo({...shippingInfo, email: e.target.value})} />
-                    <input type="tel" placeholder="Teléfono" value={shippingInfo.telefono} onChange={e => setShippingInfo({...shippingInfo, telefono: e.target.value})} />
-                    <input type="text" placeholder="Dirección completa" value={shippingInfo.direccion} onChange={e => setShippingInfo({...shippingInfo, direccion: e.target.value})} />
+                    <input type="text" placeholder="Nombre completo" value={shippingInfo.nombre} onChange={e => handleShippingChange('nombre', e.target.value)} />
+                    <input type="email" placeholder="Correo electrónico" value={shippingInfo.email} onChange={e => handleShippingChange('email', e.target.value)} />
+                    <input type="tel" placeholder="Teléfono" value={shippingInfo.telefono} onChange={e => handleShippingChange('telefono', e.target.value)} />
+                    <input type="text" placeholder="Dirección completa" value={shippingInfo.direccion} onChange={e => handleShippingChange('direccion', e.target.value)} />
                     <div className="form-row">
-                      <input type="text" placeholder="Ciudad" value={shippingInfo.ciudad} onChange={e => setShippingInfo({...shippingInfo, ciudad: e.target.value})} />
+                      <input type="text" placeholder="Ciudad" value={shippingInfo.ciudad} onChange={e => handleShippingChange('ciudad', e.target.value)} />
                       <input type="text" placeholder="CP" value={shippingInfo.cp} onChange={handleCPChange} />
                     </div>
-                    <input type="text" placeholder="Estado" value={shippingInfo.estado} onChange={e => setShippingInfo({...shippingInfo, estado: e.target.value})} />
+                    <input type="text" placeholder="Estado" value={shippingInfo.estado} onChange={e => handleShippingChange('estado', e.target.value)} />
                     
                     <div className="shipping-methods">
                       <h4>Opciones de Envío (Skydropx)</h4>
-                      {isFetchingRates ? (
-                        <div className="loading-rates">
-                          <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="spinner">⏳</motion.div>
-                          <span>Calculando tarifas con paqueterías...</span>
-                        </div>
-                      ) : shippingRates.length > 0 ? (
-                        shippingRates.map(rate => (
-                          <label key={rate.id} className={`shipping-option ${selectedRate?.id === rate.id ? 'active' : ''}`}>
-                            <input type="radio" name="shipping" checked={selectedRate?.id === rate.id} onChange={() => setSelectedRate(rate)} />
-                            <div className="shipping-info">
-                              <span>{rate.carrier} - {rate.service}</span>
-                              <small>Llega en {rate.time}</small>
-                            </div>
-                            <span className="shipping-price">${rate.price} MXN</span>
-                          </label>
-                        ))
-                      ) : (
-                        <p className="cp-prompt">Ingresa tu CP para ver opciones de envío</p>
-                      )}
+                      <div className="shipping-methods-grid">
+                        {isFetchingRates ? (
+                          <div className="loading-rates-indicator">
+                            <div className="loader-spinner"></div>
+                            <p>Cotizando las mejores tarifas...</p>
+                          </div>
+                        ) : shippingRates.length > 0 ? (
+                          shippingRates.map(rate => (
+                            <motion.div 
+                              key={rate.id}
+                              whileHover={{ y: -2 }}
+                              className={`shipping-method-card ${selectedRate?.id === rate.id ? 'active' : ''}`}
+                              onClick={() => setSelectedRate(rate)}
+                            >
+                              <div className="carrier-info">
+                                <strong>{rate.carrier}</strong>
+                                <span>{rate.service}</span>
+                              </div>
+                              <div className="price-info">
+                                <span className="shipping-price">${rate.price.toLocaleString()} MXN</span>
+                                <span className="shipping-time">{rate.time}</span>
+                              </div>
+                            </motion.div>
+                          ))
+                        ) : (
+                          <p className="no-rates-msg">Ingresa un Código Postal válido para cotizar.</p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -791,7 +880,40 @@ function App() {
                 {checkoutStep === 'payment' && (
                   <div className="payment-view">
                     {clientSecret ? (
-                      <Elements stripe={stripePromise} options={{ clientSecret }}>
+                      <Elements 
+                        stripe={stripePromise} 
+                        options={{ 
+                          clientSecret,
+                          appearance: {
+                            theme: 'stripe',
+                            variables: {
+                              colorPrimary: '#0F172A',
+                              colorBackground: '#ffffff',
+                              colorText: '#0F172A',
+                              colorDanger: '#ef4444',
+                              fontFamily: 'Outfit, system-ui, sans-serif',
+                              spacingUnit: '4px',
+                              borderRadius: '12px',
+                              colorIcon: '#0F172A',
+                            },
+                            rules: {
+                              '.Label': {
+                                color: '#0F172A',
+                                fontWeight: '600',
+                                marginBottom: '8px',
+                              },
+                              '.Input': {
+                                border: '1px solid #E2E8F0',
+                                boxShadow: 'none',
+                              },
+                              '.Input:focus': {
+                                border: '1px solid #EAB308',
+                                boxShadow: '0 0 0 3px rgba(234, 179, 8, 0.1)',
+                              }
+                            }
+                          }
+                        }}
+                      >
                         <CheckoutForm 
                           onPaymentSuccess={handlePaymentSuccess} 
                           cartTotal={cartTotal} 
@@ -800,7 +922,8 @@ function App() {
                       </Elements>
                     ) : (
                       <div className="loading-payment">
-                        <p>Cargando pasarela de pago...</p>
+                        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="spinner">⏳</motion.div>
+                        <p>Iniciando pasarela de pago segura...</p>
                       </div>
                     )}
                   </div>
@@ -870,6 +993,23 @@ function App() {
                     <span>Total a Pagar</span>
                     <span>${(cartTotal + finalShippingPrice).toLocaleString()} MXN</span>
                   </div>
+                  <p className="shipping-notice-small">
+                    IVA incluido. Los tiempos de entrega son estimados por la paquetería.
+                  </p>
+
+                  <AnimatePresence>
+                    {validationError && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="validation-error-banner"
+                      >
+                        <AlertCircle size={16} /> 
+                        <span>{validationError}</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                   
                   {checkoutStep === 'cart' && (
                     <button className="btn-checkout" onClick={() => setCheckoutStep('shipping')}>Continuar al Envío <ChevronRight size={20} /></button>
