@@ -35,7 +35,7 @@ body {
 }
 
 /* Glass Navigation */
-nav {
+.main-nav {
   position: fixed;
   top: 0;
   width: 100%;

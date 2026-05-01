@@ -1188,7 +1188,7 @@ function App() {
 
   return (
     <div className="app">
-      <nav>
+      <nav className="main-nav">
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="logo">
           UNIFORMES<span>PRO</span>
         </motion.div>
