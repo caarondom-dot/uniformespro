@@ -1301,6 +1301,20 @@ function App() {
         </div>
       </section>
 
+      <section className="section" id="catalogo">
+        <div className="section-title">
+          <span className="badge">Colección 2026</span>
+          <h2>Lo más buscado</h2>
+          <p>Selección de prendas con acabados premium y costuras reforzadas.</p>
+        </div>
+
+        <div className="products-grid">
+          {products.map((product) => (
+            <ProductCard key={product.id} product={product} onAddToCart={addToCart} />
+          ))}
+        </div>
+      </section>
+
       <section className="section beneficios-section" id="beneficios" style={{ background: '#F8FAFC', padding: '6rem 5%' }}>
         <div className="section-title" style={{ textAlign: 'center', marginBottom: '4rem' }}>
           <span className="badge" style={{ background: '#DBEAFE', color: '#1E40AF', padding: '0.5rem 1.5rem', borderRadius: '2rem', fontSize: '0.875rem', fontWeight: 600 }}>Nuestra Promesa</span>
@@ -1330,20 +1344,6 @@ function App() {
               <h3 style={{ fontSize: '1.25rem', color: '#1E293B', marginBottom: '1rem', fontWeight: 700 }}>{item.title}</h3>
               <p style={{ color: '#64748B', lineHeight: '1.6', fontSize: '0.95rem' }}>{item.desc}</p>
             </motion.div>
-          ))}
-        </div>
-      </section>
-
-      <section className="section" id="catalogo">
-        <div className="section-title">
-          <span className="badge">Colección 2026</span>
-          <h2>Lo más buscado</h2>
-          <p>Selección de prendas con acabados premium y costuras reforzadas.</p>
-        </div>
-
-        <div className="products-grid">
-          {products.map((product) => (
-            <ProductCard key={product.id} product={product} onAddToCart={addToCart} />
           ))}
         </div>
       </section>
