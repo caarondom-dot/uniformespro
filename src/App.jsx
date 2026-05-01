@@ -1427,13 +1427,13 @@ function App() {
 
                   <div className="form-group">
                     <label>URL Imagen Principal</label>
-                    <input type="url" required value={editingProduct.images?.[0] || ''} onChange={e => {
+                    <input type="text" required value={editingProduct.images?.[0] || ''} onChange={e => {
                       const newImages = [...(editingProduct.images || [])];
                       newImages[0] = e.target.value;
                       setEditingProduct({...editingProduct, images: newImages});
-                    }} style={{width: '100%', padding: '0.8rem', border: '1px solid #E2E8F0', borderRadius: '8px'}} placeholder="https://..." />
+                    }} style={{width: '100%', padding: '0.8rem', border: '1px solid #E2E8F0', borderRadius: '8px'}} placeholder="/ruta-de-la-imagen.jpg o https://..." />
                     <p style={{fontSize: '0.8rem', color: '#64748B', marginTop: '0.5rem'}}>
-                      Ingresa el enlace directo a la imagen.
+                      Ingresa el enlace a la imagen o la ruta local (ej. /Camisa modelo.png).
                     </p>
                     {editingProduct.images?.[0] && (
                       <div style={{marginTop: '1rem', border: '1px solid #E2E8F0', padding: '0.5rem', borderRadius: '8px', display: 'inline-block', background: 'white'}}>
