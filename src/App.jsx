@@ -636,43 +636,51 @@ function App() {
       return;
     }
 
-    const exportData = filteredOrders.map(o => ({
-      ID: o.id?.toUpperCase() || 'N/A',
-      Fecha: o.createdAt ? new Date(o.createdAt).toLocaleDateString() : 'N/A',
-      Cliente: o.shipping?.nombre || 'N/A',
-      Email: o.shipping?.email || 'N/A',
-      Telefono: o.shipping?.telefono || 'N/A',
-      Ciudad: o.shipping?.ciudad || 'N/A',
-      Estado: o.shipping?.estado || 'N/A',
-      Items: o.items?.map(i => `${i.name} (Talla: ${i.size}, Cant: ${i.quantity})`).join(' | ') || 'N/A',
-      Carrier: o.shipping?.rate?.carrier || 'N/A',
-      Servicio: o.shipping?.rate?.service || 'N/A',
-      Subtotal: (o.total - (o.shipping?.rate?.price || 0)).toFixed(2),
-      Envio: (o.shipping?.rate?.price || 0).toFixed(2),
-      Total: (o.total || 0).toFixed(2)
-    }));
+    try {
+      const exportData = filteredOrders.map(o => ({
+        ID: o.id?.toUpperCase() || 'N/A',
+        Fecha: o.createdAt ? new Date(o.createdAt).toLocaleDateString() : 'N/A',
+        Cliente: o.shipping?.nombre || 'N/A',
+        Email: o.shipping?.email || 'N/A',
+        Telefono: o.shipping?.telefono || 'N/A',
+        Ciudad: o.shipping?.ciudad || 'N/A',
+        Estado: o.shipping?.estado || 'N/A',
+        Items: o.items?.map(i => `${i.name} (Talla: ${i.size}, Cant: ${i.quantity})`).join(' | ') || 'N/A',
+        Carrier: o.shipping?.rate?.carrier || 'N/A',
+        Servicio: o.shipping?.rate?.service || 'N/A',
+        Subtotal: (o.total - (o.shipping?.rate?.price || 0)).toFixed(2),
+        Envio: (o.shipping?.rate?.price || 0).toFixed(2),
+        Total: (o.total || 0).toFixed(2)
+      }));
 
-    const csv = Papa.unparse(exportData);
-    // Add BOM (\uFEFF) so Excel opens it correctly as UTF-8
-    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    
-    const timestamp = new Date().toISOString().split('T')[0];
-    const fileName = `pedidos_uniformespro_${timestamp}.csv`;
-    
-    link.href = url;
-    link.download = fileName;
-    
-    // Explicitly add to DOM before clicking for better cross-browser support
-    document.body.appendChild(link);
-    link.click();
-    
-    // Clean up
-    setTimeout(() => {
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    }, 100);
+      const csv = Papa.unparse(exportData);
+      
+      // Use standard CSV MIME type and UTF-8 BOM
+      const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      
+      const timestamp = new Date().toISOString().split('T')[0];
+      const fileName = `pedidos_uniformespro_${timestamp}.csv`;
+      
+      link.href = url;
+      link.setAttribute('download', fileName);
+      link.style.visibility = 'hidden';
+      link.style.position = 'absolute';
+      
+      // Explicitly add to DOM before clicking
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up after a longer delay to ensure the browser has handled the request
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 1000);
+    } catch (err) {
+      console.error("Error al exportar Excel:", err);
+      alert("Hubo un problema al generar el reporte. Por favor intenta de nuevo.");
+    }
   };
 
   useEffect(() => {
