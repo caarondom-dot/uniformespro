@@ -117,6 +117,7 @@ const ProductCard = ({ product, onAddToCart }) => {
               src={product.images[activeImg]} 
               alt={product.name}
               className="main-product-img"
+              loading="lazy"
             />
           </AnimatePresence>
           
@@ -482,19 +483,28 @@ function App() {
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [adminTab, setAdminTab] = useState('dashboard');
   const [editingProduct, setEditingProduct] = useState(null);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
 
   useEffect(() => {
     const fetchProducts = async () => {
+      setIsLoadingProducts(true);
       try {
         const q = query(collection(db, "productos"));
         const snapshot = await getDocs(q);
         if (!snapshot.empty) {
           const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          prods.sort((a, b) => a.id - b.id);
+          // Ordenar de forma segura (numérica si es posible, alfabética si no)
+          prods.sort((a, b) => {
+            const idA = String(a.id);
+            const idB = String(b.id);
+            return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
+          });
           setProducts(prods);
         }
       } catch (err) {
         console.error("Error cargando productos de Firebase:", err);
+      } finally {
+        setIsLoadingProducts(false);
       }
     };
     fetchProducts();
@@ -510,11 +520,39 @@ function App() {
     e.preventDefault();
     try {
       await setDoc(doc(db, "productos", String(editingProduct.id)), editingProduct);
-      setProducts(prev => prev.map(p => p.id === editingProduct.id ? editingProduct : p));
+      setProducts(prev => {
+        const exists = prev.find(p => String(p.id) === String(editingProduct.id));
+        if (exists) return prev.map(p => String(p.id) === String(editingProduct.id) ? editingProduct : p);
+        return [...prev, editingProduct];
+      });
       setEditingProduct(null);
-      alert("¡Producto actualizado exitosamente!");
+      alert("¡Producto guardado exitosamente!");
     } catch (err) {
-      alert("Error actualizando producto: " + err.message);
+      alert("Error guardando producto: " + err.message);
+    }
+  };
+
+  const handleMigrateProducts = async () => {
+    if (!window.confirm("¿Deseas subir todos los productos locales que faltan a Firebase? Esto asegurará que todo tu catálogo esté en línea.")) return;
+    
+    setIsLoadingProducts(true);
+    let count = 0;
+    try {
+      for (const prod of productsData) {
+        await setDoc(doc(db, "productos", String(prod.id)), prod);
+        count++;
+      }
+      // Volver a cargar para sincronizar
+      const q = query(collection(db, "productos"));
+      const snapshot = await getDocs(q);
+      const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      prods.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+      setProducts(prods);
+      alert(`¡Sincronización completa! Se subieron/actualizaron ${count} productos.`);
+    } catch (err) {
+      alert("Error en la migración: " + err.message);
+    } finally {
+      setIsLoadingProducts(false);
     }
   };
 
@@ -1068,7 +1106,7 @@ function App() {
             <div className="logo" style={{ fontSize: '1.2rem', color: 'white' }}>UNIFORMES<span style={{color: '#EAB308'}}>PRO</span></div>
           </div>
           <nav>
-            <button className={adminTab === 'dashboard' ? 'active' : ''} onClick={() => setAdminTab('dashboard')}><LayoutDashboard size={20} /> Dashboard</button>
+            <button className={adminTab === 'dashboard' ? 'active' : ''} onClick={() => setAdminTab('dashboard')}><LayoutDashboard size={20} /> Panel General</button>
             <button className={adminTab === 'catalog' ? 'active' : ''} onClick={() => setAdminTab('catalog')}><Package size={20} /> Catálogo</button>
             <button onClick={() => setView('shop')}><ShoppingBag size={20} /> Ver Tienda</button>
           </nav>
@@ -1076,7 +1114,7 @@ function App() {
             <button className="admin-login-link" style={{color: '#94A3B8', padding: 0, marginTop: 0}} onClick={handleLogout}>
               <LogOut size={16} style={{marginRight: '8px'}} /> Cerrar Sesión
             </button>
-            <p style={{marginTop: '1rem', opacity: 0.5}}>Admin Panel v2.0</p>
+            <p style={{marginTop: '1rem', opacity: 0.5}}>Panel Administrativo v2.0</p>
           </div>
         </aside>
         
@@ -1243,9 +1281,14 @@ function App() {
                     <h2>Catálogo de Productos</h2>
                     <p style={{color: '#64748B', fontWeight: 500}}>Administra precios, nombres e imágenes visibles en tienda</p>
                   </div>
-                  <button className="btn-primary" onClick={() => setEditingProduct({id: Date.now(), name: '', price: 0, category: '', sizes: ['S','M','L'], images: ['/placeholder.png'], description: ''})}>
-                    <Plus size={18} /> Nuevo Producto
-                  </button>
+                  <div style={{display: 'flex', gap: '1rem'}}>
+                    <button className="btn-outline" onClick={handleMigrateProducts} style={{color: '#64748B', borderColor: '#E2E8F0', padding: '0.8rem 1.5rem'}}>
+                      <RotateCw size={18} /> Sincronizar Locales
+                    </button>
+                    <button className="btn-primary" onClick={() => setEditingProduct({id: Date.now(), name: '', price: 0, category: '', sizes: ['S','M','L'], images: ['/placeholder.png'], description: ''})}>
+                      <Plus size={18} /> Nuevo Producto
+                    </button>
+                  </div>
                 </div>
               </header>
 
@@ -1261,22 +1304,30 @@ function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {products.map(prod => (
-                      <tr key={prod.id} className="order-row">
-                        <td>
-                          <img src={prod.images?.[0] || '/placeholder.png'} alt={prod.name} style={{width: '45px', height: '45px', objectFit: 'cover', borderRadius: '8px'}} />
-                        </td>
-                        <td><strong style={{color: '#0F172A'}}>{prod.name}</strong></td>
-                        <td><span className="badge" style={{background: '#F1F5F9', color: '#475569'}}>{prod.category}</span></td>
-                        <td><strong style={{color: '#EAB308'}}>${prod.price.toLocaleString('es-MX')}</strong></td>
-                        <td>
-                          <button className="btn-action-view" onClick={() => setEditingProduct(prod)} style={{background: '#EFF6FF', color: '#2563EB', border: 'none', padding: '0.4rem 0.8rem'}}>
-                            <Edit size={16} /> Editar
-                          </button>
+                    {isLoadingProducts ? (
+                      <tr>
+                        <td colSpan="5" style={{textAlign: 'center', padding: '3rem 0'}}>
+                          <div className="loader-spinner"></div>
+                          <p style={{color: '#64748B'}}>Cargando catálogo...</p>
                         </td>
                       </tr>
-                    ))}
-                    {products.length === 0 && (
+                    ) : products.length > 0 ? (
+                      products.map(prod => (
+                        <tr key={prod.id} className="order-row">
+                          <td>
+                            <img src={prod.images?.[0] || '/placeholder.png'} alt={prod.name} style={{width: '45px', height: '45px', objectFit: 'cover', borderRadius: '8px'}} />
+                          </td>
+                          <td><strong style={{color: '#0F172A'}}>{prod.name}</strong></td>
+                          <td><span className="badge" style={{background: '#F1F5F9', color: '#475569'}}>{prod.category}</span></td>
+                          <td><strong style={{color: '#EAB308'}}>${prod.price.toLocaleString('es-MX')}</strong></td>
+                          <td>
+                            <button className="btn-action-view" onClick={() => setEditingProduct(prod)} style={{background: '#EFF6FF', color: '#2563EB', border: 'none', padding: '0.4rem 0.8rem'}}>
+                              <Edit size={16} /> Editar
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
                       <tr>
                         <td colSpan="5" style={{textAlign: 'center', padding: '3rem 0', color: '#64748B'}}>No hay productos en el catálogo.</td>
                       </tr>
@@ -1488,7 +1539,7 @@ function App() {
       <section className="hero" id="home">
         <div className="hero-content">
           <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            Viste el Éxito de tus Hijos.
+            Viste el éxito de tus hijos.
           </motion.h1>
           <motion.p initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
             Uniformes diseñados para resistir el ritmo escolar con elegancia y confort inigualable. Tecnología en telas de alta durabilidad.
@@ -1511,9 +1562,28 @@ function App() {
         </div>
 
         <div className="products-grid">
-          {products.map((product) => (
-            <ProductCard key={product.id} product={product} onAddToCart={addToCart} />
-          ))}
+          {isLoadingProducts ? (
+            // Skeleton Loader
+            [...Array(4)].map((_, i) => (
+              <div key={i} className="product-card skeleton" style={{ minHeight: '400px', background: '#F8FAFC', borderRadius: '1.5rem', overflow: 'hidden' }}>
+                <div style={{ height: '280px', background: 'linear-gradient(90deg, #F1F5F9 0%, #E2E8F0 50%, #F1F5F9 100%)', backgroundSize: '200% 100%', animation: 'skeleton-pulse 1.5s infinite' }}></div>
+                <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  <div style={{ height: '14px', width: '40%', background: '#E2E8F0', borderRadius: '4px' }}></div>
+                  <div style={{ height: '24px', width: '80%', background: '#E2E8F0', borderRadius: '4px' }}></div>
+                  <div style={{ height: '20px', width: '30%', background: '#E2E8F0', borderRadius: '4px', marginTop: 'auto' }}></div>
+                </div>
+              </div>
+            ))
+          ) : products.length > 0 ? (
+            products.map((product) => (
+              <ProductCard key={product.id} product={product} onAddToCart={addToCart} />
+            ))
+          ) : (
+            <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem 0', color: '#64748B' }}>
+              <Package size={48} style={{ marginBottom: '1rem', opacity: 0.3 }} />
+              <p>No se encontraron productos disponibles por el momento.</p>
+            </div>
+          )}
         </div>
       </section>
 

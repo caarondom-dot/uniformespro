@@ -678,6 +678,16 @@ body {
   100% { transform: rotate(360deg); }
 }
 
+@keyframes skeleton-pulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.product-card.skeleton {
+  pointer-events: none;
+  border-color: #F1F5F9;
+}
+
 .no-rates-msg {
   text-align: center;
   color: #64748b;
