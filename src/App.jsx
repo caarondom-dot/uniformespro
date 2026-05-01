@@ -533,26 +533,36 @@ function App() {
   };
 
   const handleMigrateProducts = async () => {
-    if (!window.confirm("¿Deseas sincronizar el catálogo desde el archivo CSV (productos.csv)? Esto actualizará tu base de datos en línea.")) return;
+    const isOverwrite = window.confirm("¿Deseas sincronizar desde el CSV?\n\n- Los productos NUEVOS se agregarán.\n- Los productos que YA EXISTEN en el panel se conservarán tal cual (no se sobrescribirán sus precios).");
+    if (!isOverwrite) return;
     
     setIsLoadingProducts(true);
-    let count = 0;
+    let addedCount = 0;
+    let skippedCount = 0;
     try {
       // 1. Obtener el archivo CSV
       const response = await fetch('/productos.csv');
-      if (!response.ok) throw new Error("No se pudo encontrar el archivo productos.csv en la carpeta public.");
+      if (!response.ok) throw new Error("No se pudo encontrar el archivo productos.csv.");
       const csvText = await response.text();
       
       // 2. Parsear el CSV
       const results = Papa.parse(csvText, { header: true, skipEmptyLines: true });
       const csvData = results.data;
       
-      if (csvData.length === 0) throw new Error("El archivo CSV está vacío.");
+      // 3. Obtener IDs actuales para no sobrescribir
+      const existingIds = new Set(products.map(p => String(p.id)));
 
-      // 3. Transformar y subir a Firebase
+      // 4. Transformar y subir a Firebase solo los faltantes
       for (const row of csvData) {
+        const idStr = String(row.id);
+        
+        if (existingIds.has(idStr)) {
+          skippedCount++;
+          continue;
+        }
+
         const prod = {
-          id: String(row.id),
+          id: idStr,
           name: row.name || 'Producto sin nombre',
           category: row.category || 'General',
           price: parseFloat(row.price) || 0,
@@ -563,17 +573,17 @@ function App() {
         };
 
         await setDoc(doc(db, "productos", prod.id), prod);
-        count++;
+        addedCount++;
       }
 
-      // 4. Volver a cargar para sincronizar la UI
+      // 5. Volver a cargar para sincronizar la UI
       const q = query(collection(db, "productos"));
       const snapshot = await getDocs(q);
       const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       prods.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
       setProducts(prods);
       
-      alert(`¡Sincronización completa! Se procesaron ${count} productos desde el CSV.`);
+      alert(`¡Sincronización Inteligente Finalizada!\n\n- ${addedCount} productos nuevos agregados.\n- ${skippedCount} productos omitidos (ya existían en el panel y se conservaron tus cambios).`);
     } catch (err) {
       console.error("Error en sincronización CSV:", err);
       alert("Error en la sincronización: " + err.message);
