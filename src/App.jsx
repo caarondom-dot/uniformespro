@@ -30,7 +30,8 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
+const databaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID || '(default)';
+const db = getFirestore(firebaseApp, databaseId);
 
 
 
