@@ -1301,6 +1301,39 @@ function App() {
         </div>
       </section>
 
+      <section className="section beneficios-section" id="beneficios" style={{ background: '#F8FAFC', padding: '6rem 5%' }}>
+        <div className="section-title" style={{ textAlign: 'center', marginBottom: '4rem' }}>
+          <span className="badge" style={{ background: '#DBEAFE', color: '#1E40AF', padding: '0.5rem 1.5rem', borderRadius: '2rem', fontSize: '0.875rem', fontWeight: 600 }}>Nuestra Promesa</span>
+          <h2 style={{ fontSize: '2.5rem', color: '#0F172A', marginTop: '1rem', marginBottom: '1rem', fontWeight: 800 }}>¿Por qué nosotros?</h2>
+          <p style={{ color: '#475569', fontSize: '1.1rem', maxWidth: '600px', margin: '0 auto', lineHeight: '1.6' }}>
+            Más que uniformes, creamos prendas diseñadas para el rendimiento, confort y durabilidad que los estudiantes necesitan en su día a día.
+          </p>
+        </div>
+        
+        <div className="beneficios-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+          {[
+            { icon: '⭐', title: 'Calidad Superior', desc: 'Utilizamos telas de última generación resistentes al desgaste, al lavado frecuente y que mantienen su color por más tiempo.' },
+            { icon: '🛡️', title: 'Garantía de Confección', desc: 'Costuras reforzadas y terminados de alta precisión para soportar el dinamismo diario de los estudiantes sin perder la forma.' },
+            { icon: '🚚', title: 'Envíos Rápidos y Seguros', desc: 'Llegamos a cualquier parte de México con tarifas competitivas y tiempos de entrega garantizados a través de las mejores paqueterías.' },
+            { icon: '🧵', title: 'Diseño Ergonómico', desc: 'Patrones actualizados que permiten total libertad de movimiento, brindando el máximo confort durante toda la jornada escolar.' }
+          ].map((item, i) => (
+            <motion.div 
+              key={i}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ delay: i * 0.1, duration: 0.5 }}
+              style={{ background: 'white', padding: '2.5rem 2rem', borderRadius: '1rem', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+              whileHover={{ y: -5, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}
+            >
+              <div style={{ fontSize: '3.5rem', marginBottom: '1.5rem', background: '#F1F5F9', width: '80px', height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>{item.icon}</div>
+              <h3 style={{ fontSize: '1.25rem', color: '#1E293B', marginBottom: '1rem', fontWeight: 700 }}>{item.title}</h3>
+              <p style={{ color: '#64748B', lineHeight: '1.6', fontSize: '0.95rem' }}>{item.desc}</p>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
       <section className="section" id="catalogo">
         <div className="section-title">
           <span className="badge">Colección 2026</span>
