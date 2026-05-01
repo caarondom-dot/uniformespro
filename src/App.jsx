@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, X, Plus, Minus, ShoppingBag, ChevronRight, Star, MessageCircle, Ruler, Shield, LayoutDashboard, CheckCircle, AlertCircle, RotateCw, LogOut, TrendingUp, DollarSign, Lock, Mail, Eye, EyeOff } from 'lucide-react';
+import { ShoppingCart, X, Plus, Minus, ShoppingBag, ChevronRight, Star, MessageCircle, Ruler, Shield, LayoutDashboard, CheckCircle, AlertCircle, RotateCw, LogOut, TrendingUp, DollarSign, Lock, Mail, Eye, EyeOff, FileText } from 'lucide-react';
 import Papa from 'papaparse';
 import confetti from 'canvas-confetti';
 import { loadStripe } from '@stripe/stripe-js';
@@ -956,7 +956,7 @@ function App() {
               </div>
               <div style={{display: 'flex', gap: '0.8rem'}}>
                 <button className="btn-refresh" onClick={handleExportExcel} style={{background: '#0F172A', color: 'white', border: '1px solid #1E293B'}}>
-                  <MessageCircle size={18} /> Exportar Excel
+                  <FileText size={18} /> Exportar Excel
                 </button>
                 <button className="btn-refresh" onClick={fetchOrders} disabled={isFetchingOrders} style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
                   <motion.div animate={isFetchingOrders ? { rotate: 360 } : {}} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
