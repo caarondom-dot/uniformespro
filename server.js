@@ -257,6 +257,50 @@ app.post('/api/shipping-rates', async (req, res) => {
   }
 });
 
+app.post('/api/create-label', async (req, res) => {
+  try {
+    const { rate_id } = req.body;
+    // Si es una tarifa por defecto/fallback, no podemos generar guía automática
+    if (!rate_id || rate_id.startsWith('def_')) {
+      return res.json({ success: true, label_url: null, tracking_number: 'MANUAL_PENDING' });
+    }
+
+    const token = await getSkydropxToken();
+    if (!token) throw new Error("Token Skydropx no disponible");
+
+    // Skydropx PRO: generar la guía a partir del rate_id
+    const response = await fetch('https://api-pro.skydropx.com/api/v1/shipments', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ rate_id })
+    });
+
+    const data = await response.json();
+    
+    if (response.ok && data) {
+      // Las respuestas pueden variar, buscamos label_url o document_url y tracking
+      const labelUrl = data.label_url || (data.data && data.data.attributes && data.data.attributes.label_url) || null;
+      const tracking = data.tracking_number || (data.data && data.data.attributes && data.data.attributes.tracking_number) || 'PROCESANDO';
+      
+      console.log(`✅ Guía generada exitosamente. Tracking: ${tracking}`);
+      return res.json({ 
+        success: true, 
+        label_url: labelUrl, 
+        tracking_number: tracking,
+        raw_data: data
+      });
+    }
+
+    throw new Error(data.message || JSON.stringify(data.errors) || "Error desconocido al generar guía");
+  } catch (error) {
+    console.error("❌ Error generando guía:", error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post('/api/confirm-order', async (req, res) => {
   try {
     const { orderDetails } = req.body;

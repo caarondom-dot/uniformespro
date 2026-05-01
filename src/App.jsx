@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, X, Plus, Minus, ShoppingBag, ChevronRight, Star, MessageCircle, Ruler, Shield, LayoutDashboard, CheckCircle, AlertCircle, RotateCw, LogOut, TrendingUp, DollarSign, Lock, Mail, Eye, EyeOff, FileText } from 'lucide-react';
+import { ShoppingCart, X, Plus, Minus, ShoppingBag, ChevronRight, Star, MessageCircle, Ruler, Shield, LayoutDashboard, CheckCircle, AlertCircle, RotateCw, LogOut, TrendingUp, DollarSign, Lock, Mail, Eye, EyeOff, FileText, Package, Edit, Save, Trash, Image as ImageIcon } from 'lucide-react';
 import Papa from 'papaparse';
 import confetti from 'canvas-confetti';
 import { loadStripe } from '@stripe/stripe-js';
@@ -9,7 +9,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 // Firebase Imports
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
-import { getFirestore, collection, getDocs, query, orderBy } from "firebase/firestore";
+import { getFirestore, collection, getDocs, query, orderBy, doc, setDoc } from "firebase/firestore";
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_PonAquiTuClavePublicaDeStripe');
 
@@ -480,14 +480,43 @@ function App() {
   const [validationError, setValidationError] = useState('');
   const [adminUser, setAdminUser] = useState(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [adminTab, setAdminTab] = useState('dashboard');
+  const [editingProduct, setEditingProduct] = useState(null);
 
   useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const q = query(collection(db, "productos"));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          prods.sort((a, b) => a.id - b.id);
+          setProducts(prods);
+        }
+      } catch (err) {
+        console.error("Error cargando productos de Firebase:", err);
+      }
+    };
+    fetchProducts();
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setAdminUser(user);
       setIsAuthChecking(false);
     });
     return () => unsubscribe();
   }, []);
+
+  const handleSaveProduct = async (e) => {
+    e.preventDefault();
+    try {
+      await setDoc(doc(db, "productos", String(editingProduct.id)), editingProduct);
+      setProducts(prev => prev.map(p => p.id === editingProduct.id ? editingProduct : p));
+      setEditingProduct(null);
+      alert("¡Producto actualizado exitosamente!");
+    } catch (err) {
+      alert("Error actualizando producto: " + err.message);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -887,13 +916,39 @@ function App() {
     const currentCartTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
     const currentShippingPrice = selectedRate ? parseFloat(selectedRate.price) : 0;
 
+    let labelData = { label_url: null, tracking_number: 'PENDIENTE' };
+    
+    try {
+      if (selectedRate && selectedRate.id) {
+        console.log("Generando guía con Skydropx...");
+        const labelRes = await fetch(`${API_BASE_URL}/api/create-label`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rate_id: selectedRate.id })
+        });
+        const labelResult = await labelRes.json();
+        if (labelResult.success) {
+          labelData = {
+            label_url: labelResult.label_url,
+            tracking_number: labelResult.tracking_number
+          };
+          console.log("Guía exitosa:", labelData);
+        } else {
+          console.error("No se pudo generar la guía:", labelResult.error);
+        }
+      }
+    } catch (err) {
+      console.error("Error en la solicitud de creación de guía:", err);
+    }
+
     const newOrder = {
       id: `ORD-${Date.now()}`,
       date: new Date().toLocaleString(),
       items: [...cart],
       shipping: { ...shippingInfo, rate: selectedRate },
       total: currentCartTotal + currentShippingPrice,
-      status: 'Pagado'
+      status: 'Pagado',
+      ...labelData
     };
 
     try {
@@ -1013,7 +1068,8 @@ function App() {
             <div className="logo" style={{ fontSize: '1.2rem', color: 'white' }}>UNIFORMES<span style={{color: '#EAB308'}}>PRO</span></div>
           </div>
           <nav>
-            <button className="active"><LayoutDashboard size={20} /> Dashboard</button>
+            <button className={adminTab === 'dashboard' ? 'active' : ''} onClick={() => setAdminTab('dashboard')}><LayoutDashboard size={20} /> Dashboard</button>
+            <button className={adminTab === 'catalog' ? 'active' : ''} onClick={() => setAdminTab('catalog')}><Package size={20} /> Catálogo</button>
             <button onClick={() => setView('shop')}><ShoppingBag size={20} /> Ver Tienda</button>
           </nav>
           <div className="sidebar-footer">
@@ -1025,24 +1081,26 @@ function App() {
         </aside>
         
         <main className="admin-main">
-          <header className="admin-header">
-            <div className="header-top">
-              <div>
-                <h2>Panel de Control</h2>
-                <p style={{color: '#64748B', fontWeight: 500}}>Gestiona tus ventas y pedidos en tiempo real</p>
-              </div>
-              <div style={{display: 'flex', gap: '0.8rem'}}>
-                <button className="btn-refresh" onClick={handleExportExcel} style={{background: '#0F172A', color: 'white', border: '1px solid #1E293B'}}>
-                  <FileText size={18} /> Exportar Excel
-                </button>
-                <button className="btn-refresh" onClick={fetchOrders} disabled={isFetchingOrders} style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-                  <motion.div animate={isFetchingOrders ? { rotate: 360 } : {}} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
-                    <RotateCw size={18} />
-                  </motion.div>
-                  {isFetchingOrders ? 'Sincronizando...' : 'Actualizar Datos'}
-                </button>
-              </div>
-            </div>
+          {adminTab === 'dashboard' && (
+            <>
+              <header className="admin-header">
+                <div className="header-top">
+                  <div>
+                    <h2>Panel de Control</h2>
+                    <p style={{color: '#64748B', fontWeight: 500}}>Gestiona tus ventas y pedidos en tiempo real</p>
+                  </div>
+                  <div style={{display: 'flex', gap: '0.8rem'}}>
+                    <button className="btn-refresh" onClick={handleExportExcel} style={{background: '#0F172A', color: 'white', border: '1px solid #1E293B'}}>
+                      <FileText size={18} /> Exportar Excel
+                    </button>
+                    <button className="btn-refresh" onClick={fetchOrders} disabled={isFetchingOrders} style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                      <motion.div animate={isFetchingOrders ? { rotate: 360 } : {}} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
+                        <RotateCw size={18} />
+                      </motion.div>
+                      {isFetchingOrders ? 'Sincronizando...' : 'Actualizar Datos'}
+                    </button>
+                  </div>
+                </div>
             
             <div className="admin-stats">
               <div className="stat-card">
@@ -1174,6 +1232,60 @@ function App() {
               </tbody>
             </table>
           </div>
+          </>
+          )}
+
+          {adminTab === 'catalog' && (
+            <>
+              <header className="admin-header">
+                <div className="header-top">
+                  <div>
+                    <h2>Catálogo de Productos</h2>
+                    <p style={{color: '#64748B', fontWeight: 500}}>Administra precios, nombres e imágenes visibles en tienda</p>
+                  </div>
+                  <button className="btn-primary" onClick={() => setEditingProduct({id: Date.now(), name: '', price: 0, category: '', sizes: ['S','M','L'], images: ['/placeholder.png'], description: ''})}>
+                    <Plus size={18} /> Nuevo Producto
+                  </button>
+                </div>
+              </header>
+
+              <div className="orders-table-container" style={{background: 'white', borderRadius: '1rem', padding: '1.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'}}>
+                <table className="orders-table">
+                  <thead>
+                    <tr>
+                      <th>Imagen</th>
+                      <th>Nombre del Producto</th>
+                      <th>Categoría</th>
+                      <th>Precio Público</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map(prod => (
+                      <tr key={prod.id} className="order-row">
+                        <td>
+                          <img src={prod.images?.[0] || '/placeholder.png'} alt={prod.name} style={{width: '45px', height: '45px', objectFit: 'cover', borderRadius: '8px'}} />
+                        </td>
+                        <td><strong style={{color: '#0F172A'}}>{prod.name}</strong></td>
+                        <td><span className="badge" style={{background: '#F1F5F9', color: '#475569'}}>{prod.category}</span></td>
+                        <td><strong style={{color: '#EAB308'}}>${prod.price.toLocaleString('es-MX')}</strong></td>
+                        <td>
+                          <button className="btn-action-view" onClick={() => setEditingProduct(prod)} style={{background: '#EFF6FF', color: '#2563EB', border: 'none', padding: '0.4rem 0.8rem'}}>
+                            <Edit size={16} /> Editar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {products.length === 0 && (
+                      <tr>
+                        <td colSpan="5" style={{textAlign: 'center', padding: '3rem 0', color: '#64748B'}}>No hay productos en el catálogo.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </main>
 
         {/* Order Detail Panel */}
@@ -1259,6 +1371,91 @@ function App() {
             </>
           )}
         </AnimatePresence>
+
+        {/* Product Edit Panel */}
+        <AnimatePresence>
+          {editingProduct && (
+            <>
+              <motion.div 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                exit={{ opacity: 0 }} 
+                className="modal-overlay" 
+                onClick={() => setEditingProduct(null)} 
+              />
+              <motion.div 
+                initial={{ x: '100%' }} 
+                animate={{ x: 0 }} 
+                exit={{ x: '100%' }} 
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="order-detail-panel"
+                style={{ width: '500px', background: '#F8FAFC' }}
+              >
+                <div className="panel-header" style={{background: 'white'}}>
+                  <h3>{editingProduct.id.toString().length > 10 ? 'Nuevo Producto' : 'Editar Producto'}</h3>
+                  <button className="btn-close-panel" onClick={() => setEditingProduct(null)}><X size={24} /></button>
+                </div>
+                
+                <form className="panel-content checkout-form" onSubmit={handleSaveProduct} style={{padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto'}}>
+                  <div className="form-group">
+                    <label>Nombre del Producto</label>
+                    <input type="text" required value={editingProduct.name} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} style={{width: '100%', padding: '0.8rem', border: '1px solid #E2E8F0', borderRadius: '8px'}} />
+                  </div>
+                  
+                  <div className="form-row" style={{display: 'flex', gap: '1rem'}}>
+                    <div className="form-group" style={{flex: 1}}>
+                      <label>Precio Público (MXN)</label>
+                      <input type="number" required value={editingProduct.price} onChange={e => setEditingProduct({...editingProduct, price: Number(e.target.value)})} style={{width: '100%', padding: '0.8rem', border: '1px solid #E2E8F0', borderRadius: '8px'}} />
+                    </div>
+                    <div className="form-group" style={{flex: 1}}>
+                      <label>Categoría</label>
+                      <select value={editingProduct.category} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})} style={{width: '100%', padding: '0.8rem', border: '1px solid #E2E8F0', borderRadius: '8px', background: 'white'}}>
+                        <option value="">Seleccionar...</option>
+                        <option value="Industrial">Industrial</option>
+                        <option value="Ejecutivo">Ejecutivo</option>
+                        <option value="Médico">Médico</option>
+                        <option value="Hostelería">Hostelería</option>
+                        <option value="Casual">Casual</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Descripción y Detalles</label>
+                    <textarea required rows={4} value={editingProduct.description} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} style={{width: '100%', padding: '0.8rem', border: '1px solid #E2E8F0', borderRadius: '8px', fontFamily: 'inherit', resize: 'vertical'}} />
+                  </div>
+
+                  <div className="form-group">
+                    <label>URL Imagen Principal</label>
+                    <input type="url" required value={editingProduct.images?.[0] || ''} onChange={e => {
+                      const newImages = [...(editingProduct.images || [])];
+                      newImages[0] = e.target.value;
+                      setEditingProduct({...editingProduct, images: newImages});
+                    }} style={{width: '100%', padding: '0.8rem', border: '1px solid #E2E8F0', borderRadius: '8px'}} placeholder="https://..." />
+                    <p style={{fontSize: '0.8rem', color: '#64748B', marginTop: '0.5rem'}}>
+                      Ingresa el enlace directo a la imagen.
+                    </p>
+                    {editingProduct.images?.[0] && (
+                      <div style={{marginTop: '1rem', border: '1px solid #E2E8F0', padding: '0.5rem', borderRadius: '8px', display: 'inline-block', background: 'white'}}>
+                         <img src={editingProduct.images[0]} alt="Preview" style={{width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px'}} onError={(e) => { e.target.src = '/placeholder.png'; }} />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div style={{marginTop: 'auto', paddingTop: '2rem', display: 'flex', gap: '1rem', justifyContent: 'flex-end'}}>
+                    <button type="button" onClick={() => setEditingProduct(null)} style={{padding: '0.8rem 1.5rem', borderRadius: '8px', border: '1px solid #E2E8F0', background: 'white', color: '#64748B', fontWeight: 600, cursor: 'pointer'}}>
+                      Cancelar
+                    </button>
+                    <button type="submit" className="btn-checkout" style={{margin: 0, width: 'auto', padding: '0.8rem 2rem'}}>
+                      <Save size={18} /> Guardar Producto
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
       </div>
     );
   }
