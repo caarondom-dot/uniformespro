@@ -637,31 +637,42 @@ function App() {
     }
 
     const exportData = filteredOrders.map(o => ({
-      ID: o.id.toUpperCase(),
-      Fecha: new Date(o.createdAt).toLocaleDateString(),
-      Cliente: o.shipping.nombre,
-      Email: o.shipping.email,
-      Telefono: o.shipping.telefono,
-      Ciudad: o.shipping.ciudad,
-      Estado: o.shipping.estado,
-      Items: o.items.map(i => `${i.name} (Talla: ${i.size}, Cant: ${i.quantity})`).join(' | '),
-      Carrier: o.shipping.rate.carrier,
-      Servicio: o.shipping.rate.service,
-      Subtotal: (o.total - o.shipping.rate.price).toFixed(2),
-      Envio: o.shipping.rate.price.toFixed(2),
-      Total: o.total.toFixed(2)
+      ID: o.id?.toUpperCase() || 'N/A',
+      Fecha: o.createdAt ? new Date(o.createdAt).toLocaleDateString() : 'N/A',
+      Cliente: o.shipping?.nombre || 'N/A',
+      Email: o.shipping?.email || 'N/A',
+      Telefono: o.shipping?.telefono || 'N/A',
+      Ciudad: o.shipping?.ciudad || 'N/A',
+      Estado: o.shipping?.estado || 'N/A',
+      Items: o.items?.map(i => `${i.name} (Talla: ${i.size}, Cant: ${i.quantity})`).join(' | ') || 'N/A',
+      Carrier: o.shipping?.rate?.carrier || 'N/A',
+      Servicio: o.shipping?.rate?.service || 'N/A',
+      Subtotal: (o.total - (o.shipping?.rate?.price || 0)).toFixed(2),
+      Envio: (o.shipping?.rate?.price || 0).toFixed(2),
+      Total: (o.total || 0).toFixed(2)
     }));
 
     const csv = Papa.unparse(exportData);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
+    // Add BOM (\uFEFF) so Excel opens it correctly as UTF-8
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `pedidos_uniformespro_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
+    
+    const timestamp = new Date().toISOString().split('T')[0];
+    const fileName = `pedidos_uniformespro_${timestamp}.csv`;
+    
+    link.href = url;
+    link.download = fileName;
+    
+    // Explicitly add to DOM before clicking for better cross-browser support
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    
+    // Clean up
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }, 100);
   };
 
   useEffect(() => {
