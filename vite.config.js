@@ -17,7 +17,7 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api-skydropx-standard/, '')
       },
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3001',
         changeOrigin: true,
       }
     }

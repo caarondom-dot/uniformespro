@@ -7,7 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import Papa from 'papaparse';
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { getFirestore, collection, addDoc, serverTimestamp, getDocs, query, orderBy } from "firebase/firestore";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,8 +48,14 @@ const firebaseConfig = {
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp, process.env.FIREBASE_DATABASE_ID || '(default)');
+const databaseId = process.env.FIREBASE_DATABASE_ID || '(default)';
+const db = getFirestore(firebaseApp, databaseId);
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+console.log("------------------------------------------");
+console.log("🔥 FIREBASE PROJECT:", firebaseConfig.projectId);
+console.log("📦 FIRESTORE DATABASE:", databaseId);
+console.log("------------------------------------------");
 
 // --- UTILIDADES SKYDROPX PRO ---
 let cachedToken = null;
@@ -254,12 +260,18 @@ app.post('/api/shipping-rates', async (req, res) => {
 app.post('/api/confirm-order', async (req, res) => {
   try {
     const { orderDetails } = req.body;
-    const docRef = await addDoc(collection(db, "pedidos"), { ...orderDetails, createdAt: new Date() });
+    const docRef = await addDoc(collection(db, "pedidos"), { 
+      ...orderDetails, 
+      createdAt: serverTimestamp() 
+    });
     res.status(200).json({ success: true, id: docRef.id });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
+// El endpoint /api/orders ha sido movido al frontend (App.jsx) por seguridad, 
+// para aprovechar Firebase Auth y las reglas de seguridad de Firestore.
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor en puerto ${PORT}`));

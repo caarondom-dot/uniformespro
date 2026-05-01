@@ -1,14 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, X, Plus, Minus, ShoppingBag, ChevronRight, Star, MessageCircle, Ruler, Shield, LayoutDashboard, CheckCircle, AlertCircle } from 'lucide-react';
+import { ShoppingCart, X, Plus, Minus, ShoppingBag, ChevronRight, Star, MessageCircle, Ruler, Shield, LayoutDashboard, CheckCircle, AlertCircle, RotateCw, LogOut, TrendingUp, DollarSign, Lock, Mail, Eye, EyeOff } from 'lucide-react';
 import Papa from 'papaparse';
 import confetti from 'canvas-confetti';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
+// Firebase Imports
+import { initializeApp } from "firebase/app";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
+import { getFirestore, collection, getDocs, query, orderBy } from "firebase/firestore";
+
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_PonAquiTuClavePublicaDeStripe');
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://uniformespro-backend.onrender.com';
+const API_BASE_URL = (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1'))
+  ? 'https://uniformespro-backend.onrender.com'
+  : (import.meta.env.VITE_API_URL || 'http://localhost:3001');
+
+// Firebase Configuration
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
 
 
 
@@ -327,16 +349,119 @@ const CheckoutForm = ({ onPaymentSuccess, cartTotal, finalShippingPrice }) => {
   );
 };
 
+const AdminLogin = ({ onLoginSuccess, onBack }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      onLoginSuccess();
+    } catch (err) {
+      console.error(err);
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setError('Credenciales inválidas. Por favor intenta de nuevo.');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Demasiados intentos fallidos. Intenta más tarde.');
+      } else {
+        setError('Ocurrió un error al iniciar sesión. Verifica tu conexión.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="login-overlay">
+      <motion.div 
+        className="login-card"
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: "spring", duration: 0.5 }}
+      >
+        <div className="login-header">
+          <div className="stat-icon" style={{background: '#EAB308', color: '#0F172A', width: '48px', height: '48px', borderRadius: '12px', margin: '0 auto 1rem'}}>
+            <Shield size={24} />
+          </div>
+          <h2>Acceso Administrador</h2>
+          <p>Ingresa tus credenciales para gestionar la tienda</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="login-form">
+          <div className="input-group">
+            <label><Mail size={16} /> Correo Electrónico</label>
+            <input 
+              type="email" 
+              placeholder="admin@uniformespro.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="input-group">
+            <label><Lock size={16} /> Contraseña</label>
+            <div className="password-input-wrapper">
+              <input 
+                type={showPassword ? "text" : "password"} 
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button 
+                type="button" 
+                className="toggle-password"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <motion.div 
+              className="error-message"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <AlertCircle size={16} /> {error}
+            </motion.div>
+          )}
+
+          <button type="submit" className="btn-login" disabled={loading}>
+            {loading ? <RotateCw className="spinner" size={20} /> : 'Iniciar Sesión'}
+          </button>
+
+          <button type="button" className="btn-back" onClick={onBack}>
+            Regresar a la Tienda
+          </button>
+        </form>
+      </motion.div>
+    </div>
+  );
+};
+
 function App() {
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [products, setProducts] = useState(productsData);
   const [checkoutStep, setCheckoutStep] = useState('cart'); // 'cart', 'shipping', 'payment', 'success'
-  const [view, setView] = useState('shop'); // 'shop' or 'admin'
+  const [view, setView] = useState(() => localStorage.getItem('uniformespro_view') || 'shop'); 
   const [orders, setOrders] = useState(() => {
     const saved = localStorage.getItem('uniformespro_orders');
     return saved ? JSON.parse(saved) : [];
   });
+  const [filteredOrders, setFilteredOrders] = useState([]);
+  const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [isFetchingOrders, setIsFetchingOrders] = useState(false);
   const [shippingRates, setShippingRates] = useState([]);
   const [selectedRate, setSelectedRate] = useState(null);
   const [isFetchingRates, setIsFetchingRates] = useState(false);
@@ -352,6 +477,25 @@ function App() {
   const [clientSecret, setClientSecret] = useState('');
   const [isFetchingSecret, setIsFetchingSecret] = useState(false);
   const [validationError, setValidationError] = useState('');
+  const [adminUser, setAdminUser] = useState(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setAdminUser(user);
+      setIsAuthChecking(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setView('shop');
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error);
+    }
+  };
 
   const validateShipping = () => {
     setValidationError('');
@@ -410,6 +554,114 @@ function App() {
     }
   };
 
+
+  const fetchOrders = async () => {
+    setIsFetchingOrders(true);
+    try {
+      // Consulta directa a Firestore (segura porque el usuario ya está autenticado)
+      const q = query(collection(db, "pedidos"), orderBy("createdAt", "desc"));
+      const querySnapshot = await getDocs(q);
+      const ordersData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      console.log("Raw orders from Firestore:", ordersData);
+      
+      // Normalizar fechas de Firebase (maneja Timestamps, strings y fallbacks)
+      const normalized = ordersData.map(o => {
+        let ts = Date.now();
+        if (o.createdAt) {
+          if (o.createdAt.seconds !== undefined) ts = o.createdAt.seconds * 1000;
+          else if (o.createdAt._seconds !== undefined) ts = o.createdAt._seconds * 1000;
+          else if (typeof o.createdAt === 'number') ts = o.createdAt;
+          else if (typeof o.createdAt === 'string') {
+            const parsed = new Date(o.createdAt).getTime();
+            if (!isNaN(parsed)) ts = parsed;
+          }
+        }
+        return { ...o, createdAt: ts };
+      });
+
+      // Ya vienen ordenados por la query, pero reforzamos por si acaso
+      normalized.sort((a, b) => b.createdAt - a.createdAt);
+
+      setOrders(normalized);
+      setFilteredOrders(normalized);
+      console.log("Sincronización directa exitosa:", normalized.length, "pedidos.");
+    } catch (err) {
+      console.error("Error fetching orders from Firestore:", err);
+      if (err.code === 'permission-denied') {
+        alert("Error de permisos: No puedes ver los pedidos. Verifica las reglas de Firestore.");
+      }
+
+      // Mantener los pedidos previos de localStorage si la red falla
+    } finally {
+      setIsFetchingOrders(false);
+    }
+  };
+
+  useEffect(() => {
+    localStorage.setItem('uniformespro_view', view);
+    if (view === 'admin' && adminUser) {
+      fetchOrders();
+    }
+  }, [view, adminUser]);
+
+  // Persistir pedidos cuando cambien
+  useEffect(() => {
+    localStorage.setItem('uniformespro_orders', JSON.stringify(orders));
+  }, [orders]);
+
+  // Filtro de fecha en tiempo real
+  useEffect(() => {
+    if (dateFilter.start || dateFilter.end) {
+      const start = dateFilter.start ? new Date(dateFilter.start).getTime() : 0;
+      const end = dateFilter.end ? new Date(dateFilter.end).getTime() + 86400000 : Infinity; // +1 día para incluir el final
+      
+      const filtered = orders.filter(o => {
+        const orderTime = new Date(o.createdAt).getTime();
+        return orderTime >= start && orderTime <= end;
+      });
+      setFilteredOrders(filtered);
+    } else {
+      setFilteredOrders(orders);
+    }
+  }, [dateFilter, orders]);
+
+  const handleExportExcel = () => {
+    if (filteredOrders.length === 0) {
+      alert("No hay pedidos para exportar con los filtros actuales.");
+      return;
+    }
+
+    const exportData = filteredOrders.map(o => ({
+      ID: o.id.toUpperCase(),
+      Fecha: new Date(o.createdAt).toLocaleDateString(),
+      Cliente: o.shipping.nombre,
+      Email: o.shipping.email,
+      Telefono: o.shipping.telefono,
+      Ciudad: o.shipping.ciudad,
+      Estado: o.shipping.estado,
+      Items: o.items.map(i => `${i.name} (Talla: ${i.size}, Cant: ${i.quantity})`).join(' | '),
+      Carrier: o.shipping.rate.carrier,
+      Servicio: o.shipping.rate.service,
+      Subtotal: (o.total - o.shipping.rate.price).toFixed(2),
+      Envio: o.shipping.rate.price.toFixed(2),
+      Total: o.total.toFixed(2)
+    }));
+
+    const csv = Papa.unparse(exportData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `pedidos_uniformespro_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   useEffect(() => {
     Papa.parse('/productos.csv', {
@@ -642,10 +894,14 @@ function App() {
           origin: { y: 0.6 },
           colors: ['#EAB308', '#0F172A', '#22C55E']
         });
-        const updatedOrders = [newOrder, ...orders];
+        
+        // Creamos una copia para el estado local con formato consistente
+        const localOrder = { ...newOrder, createdAt: Date.now(), id: result.id || newOrder.id };
+        const updatedOrders = [localOrder, ...orders];
         setOrders(updatedOrders);
         localStorage.setItem('uniformespro_orders', JSON.stringify(updatedOrders));
         setCheckoutStep('success');
+        setCart([]); // Limpiar carrito
       } else {
         alert("Error del servidor: " + (result.error || "Desconocido"));
       }
@@ -663,63 +919,177 @@ function App() {
   };
 
   if (view === 'admin') {
+    if (isAuthChecking) return <div className="loading-screen" style={{height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}><RotateCw className="spinner" /></div>;
+    if (!adminUser) return <AdminLogin onLoginSuccess={() => fetchOrders()} onBack={() => setView('shop')} />;
+
+    const totalSales = filteredOrders.reduce((acc, o) => acc + o.total, 0);
+    const avgTicket = filteredOrders.length > 0 ? totalSales / filteredOrders.length : 0;
+
     return (
       <div className="admin-layout">
         <aside className="admin-sidebar">
           <div className="admin-logo">
-            <Shield size={24} />
-            <span>Panel Control</span>
+            <div className="stat-icon" style={{background: '#EAB308', color: '#0F172A', width: '40px', height: '40px', borderRadius: '10px'}}>
+              <Shield size={20} />
+            </div>
+            <div className="logo" style={{ fontSize: '1.2rem', color: 'white' }}>UNIFORMES<span style={{color: '#EAB308'}}>PRO</span></div>
           </div>
           <nav>
             <button className="active"><LayoutDashboard size={20} /> Dashboard</button>
             <button onClick={() => setView('shop')}><ShoppingBag size={20} /> Ver Tienda</button>
           </nav>
+          <div className="sidebar-footer">
+            <button className="admin-login-link" style={{color: '#94A3B8', padding: 0, marginTop: 0}} onClick={handleLogout}>
+              <LogOut size={16} style={{marginRight: '8px'}} /> Cerrar Sesión
+            </button>
+            <p style={{marginTop: '1rem', opacity: 0.5}}>Admin Panel v2.0</p>
+          </div>
         </aside>
         
         <main className="admin-main">
           <header className="admin-header">
-            <h2>Resumen de Ventas</h2>
+            <div className="header-top">
+              <div>
+                <h2>Panel de Control</h2>
+                <p style={{color: '#64748B', fontWeight: 500}}>Gestiona tus ventas y pedidos en tiempo real</p>
+              </div>
+              <div style={{display: 'flex', gap: '0.8rem'}}>
+                <button className="btn-refresh" onClick={handleExportExcel} style={{background: '#0F172A', color: 'white', border: '1px solid #1E293B'}}>
+                  <MessageCircle size={18} /> Exportar Excel
+                </button>
+                <button className="btn-refresh" onClick={fetchOrders} disabled={isFetchingOrders} style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                  <motion.div animate={isFetchingOrders ? { rotate: 360 } : {}} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
+                    <RotateCw size={18} />
+                  </motion.div>
+                  {isFetchingOrders ? 'Sincronizando...' : 'Actualizar Datos'}
+                </button>
+              </div>
+            </div>
+            
             <div className="admin-stats">
               <div className="stat-card">
-                <span>Ventas Totales</span>
-                <strong>${orders.reduce((acc, o) => acc + o.total, 0).toLocaleString()}</strong>
+                <div className="stat-icon yellow"><TrendingUp size={28} /></div>
+                <div className="stat-info">
+                  <h5>Ventas (Filtrado)</h5>
+                  <strong>${totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong>
+                </div>
               </div>
               <div className="stat-card">
-                <span>Pedidos</span>
-                <strong>{orders.length}</strong>
+                <div className="stat-icon green"><CheckCircle size={28} /></div>
+                <div className="stat-info">
+                  <h5>Pedidos Totales</h5>
+                  <strong>{filteredOrders.length}</strong>
+                </div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-icon blue"><DollarSign size={28} /></div>
+                <div className="stat-info">
+                  <h5>Ticket Promedio</h5>
+                  <strong>${avgTicket.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong>
+                </div>
               </div>
             </div>
           </header>
 
           <div className="orders-table-container">
+            <div className="table-header" style={{flexDirection: 'column', alignItems: 'flex-start', gap: '1rem'}}>
+              <div style={{display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center'}}>
+                <h3>Ventas Recientes</h3>
+                <span className="badge" style={{background: '#F1F5F9', color: '#475569'}}>{filteredOrders.length} transacciones</span>
+              </div>
+              
+              <div className="admin-filters">
+                <div className="filter-group">
+                  <label>Desde:</label>
+                  <input 
+                    type="date" 
+                    value={dateFilter.start} 
+                    onChange={(e) => setDateFilter(prev => ({ ...prev, start: e.target.value }))}
+                  />
+                </div>
+                <div className="filter-group">
+                  <label>Hasta:</label>
+                  <input 
+                    type="date" 
+                    value={dateFilter.end} 
+                    onChange={(e) => setDateFilter(prev => ({ ...prev, end: e.target.value }))}
+                  />
+                </div>
+                {(dateFilter.start || dateFilter.end) && (
+                  <button className="btn-clear-filters" onClick={() => setDateFilter({ start: '', end: '' })}>
+                    Limpiar Filtros
+                  </button>
+                )}
+              </div>
+            </div>
             <table className="orders-table">
               <thead>
                 <tr>
-                  <th>ID Pedido</th>
+                  <th>Referencia</th>
                   <th>Fecha</th>
                   <th>Cliente</th>
-                  <th>Total</th>
-                  <th>Status</th>
+                  <th>Destino</th>
+                  <th>Monto</th>
+                  <th>Estado</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {orders.length === 0 ? (
-                  <tr><td colSpan="6" style={{textAlign: 'center', padding: '3rem'}}>No hay pedidos registrados aún.</td></tr>
+                {isFetchingOrders ? (
+                  <tr>
+                    <td colSpan="7" style={{textAlign: 'center', padding: '8rem 0'}}>
+                      <div className="loading-state">
+                        <motion.div 
+                          animate={{ rotate: 360 }} 
+                          transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                          style={{ display: 'inline-block', marginBottom: '1rem' }}
+                        >
+                          <RotateCw size={48} color="#EAB308" />
+                        </motion.div>
+                        <p style={{color: '#64748B', fontWeight: 500}}>Sincronizando con la base de datos...</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{textAlign: 'center', padding: '8rem 0'}}>
+                      <div className="empty-state" style={{opacity: 0.6}}>
+                        <ShoppingBag size={64} style={{marginBottom: '1.5rem', color: '#CBD5E1'}} />
+                        <h4 style={{fontSize: '1.2rem', marginBottom: '0.5rem', color: '#475569'}}>No se encontraron pedidos</h4>
+                        <p style={{color: '#94A3B8'}}>Intenta cambiar el rango de fechas o sincroniza nuevamente.</p>
+                      </div>
+                    </td>
+                  </tr>
                 ) : (
-                  orders.map(order => (
-                    <tr key={order.id}>
-                      <td><strong>{order.id}</strong></td>
-                      <td>{order.date}</td>
+                  filteredOrders.map(order => (
+                    <tr key={order.id} className="order-row">
+                      <td><span className="order-id-tag">#{order.id.slice(-8).toUpperCase()}</span></td>
                       <td>
-                        <div className="client-info">
-                          <span>{order.shipping.nombre}</span>
-                          <small>{order.shipping.email}</small>
+                        <div style={{fontSize: '0.9rem'}}>
+                          <div style={{fontWeight: 600}}>{new Date(order.createdAt).toLocaleDateString()}</div>
+                          <div style={{color: '#94A3B8', fontSize: '0.8rem'}}>{new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                         </div>
                       </td>
-                      <td>${order.total.toLocaleString()}</td>
-                      <td><span className="status-badge paid">{order.status}</span></td>
-                      <td><button className="btn-view-order">Ver detalles</button></td>
+                      <td>
+                        <div className="client-info">
+                          <strong>{order.shipping.nombre}</strong>
+                          <small>{order.shipping.email}</small>
+                          <small style={{display: 'block', color: '#94A3B8', marginTop: '2px'}}>{order.shipping.telefono}</small>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="location-info">
+                          <span>{order.shipping.ciudad}</span>
+                          <small>{order.shipping.estado}</small>
+                        </div>
+                      </td>
+                      <td><span className="order-total-cell">${order.total.toLocaleString()}</span></td>
+                      <td><span className="status-badge paid">Pagado</span></td>
+                      <td>
+                        <button className="btn-action-view" onClick={() => setSelectedOrder(order)}>
+                          Detalle
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -727,6 +1097,90 @@ function App() {
             </table>
           </div>
         </main>
+
+        {/* Order Detail Panel */}
+        <AnimatePresence>
+          {selectedOrder && (
+            <>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="modal-overlay" onClick={() => setSelectedOrder(null)} />
+              <motion.div 
+                initial={{ x: '100%' }} 
+                animate={{ x: 0 }} 
+                exit={{ x: '100%' }} 
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="order-detail-panel"
+              >
+                <div className="panel-header">
+                  <h3>Resumen de Pedido</h3>
+                  <button className="btn-close-panel" onClick={() => setSelectedOrder(null)}><X size={24} /></button>
+                </div>
+                
+                <div className="panel-content">
+                  <div className="order-header-info">
+                    <span className="order-id-large">#{selectedOrder.id.toUpperCase()}</span>
+                    <span className="order-date-large">
+                      {new Date(selectedOrder.createdAt).toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    </span>
+                  </div>
+
+                  <div className="panel-section">
+                    <h4><ShoppingCart size={18} /> Productos Comprados</h4>
+                    <div className="items-list">
+                      {selectedOrder.items && selectedOrder.items.map((item, i) => (
+                        <div key={i} className="panel-item">
+                          <img src={item.currentImg || '/placeholder.png'} alt={item.name} />
+                          <div className="item-txt">
+                            <h5>{item.name}</h5>
+                            <p style={{fontSize: '0.85rem', color: '#64748B'}}>Talla: <span style={{fontWeight: 700}}>{item.size}</span> | Cantidad: <span style={{fontWeight: 700}}>{item.quantity}</span></p>
+                            <strong style={{color: '#0F172A'}}>${(item.price * item.quantity).toLocaleString()}</strong>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="panel-section">
+                    <h4><Shield size={18} /> Información de Envío</h4>
+                    <div className="shipping-details-box">
+                      <p><strong>Destinatario:</strong> {selectedOrder.shipping.nombre}</p>
+                      <p><strong>Contacto:</strong> {selectedOrder.shipping.telefono} | {selectedOrder.shipping.email}</p>
+                      <p><strong>Dirección:</strong> {selectedOrder.shipping.direccion}</p>
+                      <p><strong>Destino:</strong> {selectedOrder.shipping.ciudad}, {selectedOrder.shipping.estado}, CP {selectedOrder.shipping.cp}</p>
+                    </div>
+                  </div>
+
+                  <div className="panel-section">
+                    <h4><ChevronRight size={18} /> Logística (Skydropx)</h4>
+                    <div className="carrier-box">
+                      <div className="carrier-info">
+                        <strong style={{fontSize: '1.1rem', color: '#0F172A'}}>{selectedOrder.shipping.rate.carrier.toUpperCase()}</strong>
+                        <div style={{color: '#64748B', fontSize: '0.85rem'}}>{selectedOrder.shipping.rate.service}</div>
+                      </div>
+                      <div className="carrier-price">
+                        ${selectedOrder.shipping.rate.price.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="panel-summary">
+                    <div className="summary-row">
+                      <span>Subtotal</span>
+                      <span>${(selectedOrder.total - selectedOrder.shipping.rate.price).toLocaleString()}</span>
+                    </div>
+                    <div className="summary-row">
+                      <span>Envío</span>
+                      <span>${selectedOrder.shipping.rate.price.toLocaleString()}</span>
+                    </div>
+                    <div className="summary-row total">
+                      <span>Total Pagado</span>
+                      <span>${selectedOrder.total.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
@@ -1066,17 +1520,16 @@ function App() {
         animate={{ scale: 1, opacity: 1 }}
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
+        title="Contactar por WhatsApp"
       >
         <div className="whatsapp-pulse"></div>
-        <svg 
-          viewBox="0 0 24 24" 
-          width="32" 
-          height="32" 
-          fill="currentColor"
+        <img 
+          src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" 
+          alt="WhatsApp"
+          width="36"
+          height="36"
           style={{ position: 'relative', zIndex: 2 }}
-        >
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
-        </svg>
+        />
       </motion.a>
     </div>
   );
