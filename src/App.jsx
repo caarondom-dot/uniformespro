@@ -533,24 +533,50 @@ function App() {
   };
 
   const handleMigrateProducts = async () => {
-    if (!window.confirm("¿Deseas subir todos los productos locales que faltan a Firebase? Esto asegurará que todo tu catálogo esté en línea.")) return;
+    if (!window.confirm("¿Deseas sincronizar el catálogo desde el archivo CSV (productos.csv)? Esto actualizará tu base de datos en línea.")) return;
     
     setIsLoadingProducts(true);
     let count = 0;
     try {
-      for (const prod of productsData) {
-        await setDoc(doc(db, "productos", String(prod.id)), prod);
+      // 1. Obtener el archivo CSV
+      const response = await fetch('/productos.csv');
+      if (!response.ok) throw new Error("No se pudo encontrar el archivo productos.csv en la carpeta public.");
+      const csvText = await response.text();
+      
+      // 2. Parsear el CSV
+      const results = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+      const csvData = results.data;
+      
+      if (csvData.length === 0) throw new Error("El archivo CSV está vacío.");
+
+      // 3. Transformar y subir a Firebase
+      for (const row of csvData) {
+        const prod = {
+          id: String(row.id),
+          name: row.name || 'Producto sin nombre',
+          category: row.category || 'General',
+          price: parseFloat(row.price) || 0,
+          sizes: row.sizes ? row.sizes.split(';').map(s => s.trim()) : [],
+          images: row.images ? row.images.split(';').map(i => i.trim()) : ['/placeholder.png'],
+          rating: parseFloat(row.rating) || 5,
+          description: row.description || ''
+        };
+
+        await setDoc(doc(db, "productos", prod.id), prod);
         count++;
       }
-      // Volver a cargar para sincronizar
+
+      // 4. Volver a cargar para sincronizar la UI
       const q = query(collection(db, "productos"));
       const snapshot = await getDocs(q);
       const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       prods.sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
       setProducts(prods);
-      alert(`¡Sincronización completa! Se subieron/actualizaron ${count} productos.`);
+      
+      alert(`¡Sincronización completa! Se procesaron ${count} productos desde el CSV.`);
     } catch (err) {
-      alert("Error en la migración: " + err.message);
+      console.error("Error en sincronización CSV:", err);
+      alert("Error en la sincronización: " + err.message);
     } finally {
       setIsLoadingProducts(false);
     }
