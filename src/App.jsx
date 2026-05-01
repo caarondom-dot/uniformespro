@@ -938,6 +938,64 @@ function App() {
     setCheckoutStep('shipping');
   };
 
+  if (view === 'privacy') {
+    return (
+      <div className="privacy-view" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <header className="main-header" style={{ position: 'relative', background: '#0F172A', padding: '1rem 5%' }}>
+          <div className="logo" onClick={() => setView('shop')} style={{ cursor: 'pointer', color: 'white' }}>
+            UNIFORMES<span>PRO</span>
+          </div>
+          <nav className="desktop-nav">
+            <button className="btn-back" onClick={() => setView('shop')} style={{ color: 'white', border: '1px solid white' }}>Regresar a la tienda</button>
+          </nav>
+        </header>
+        
+        <main className="privacy-container" style={{ padding: '4rem 5%', maxWidth: '800px', margin: '0 auto', color: '#334155', flex: 1 }}>
+          <h1 style={{ color: '#0F172A', marginBottom: '2rem', fontSize: '2.5rem' }}>Aviso de Privacidad</h1>
+          
+          <div className="privacy-content" style={{ lineHeight: '1.8', fontSize: '1.1rem' }}>
+            <p><strong>Última actualización:</strong> {new Date().toLocaleDateString()}</p>
+            
+            <h2 style={{ marginTop: '2rem', color: '#1E293B', fontSize: '1.5rem', marginBottom: '1rem' }}>1. Identidad y domicilio del responsable</h2>
+            <p>UniformesPro, con domicilio en México, es responsable del uso y protección de sus datos personales, y al respecto le informamos lo siguiente:</p>
+            
+            <h2 style={{ marginTop: '2rem', color: '#1E293B', fontSize: '1.5rem', marginBottom: '1rem' }}>2. ¿Para qué fines utilizaremos sus datos personales?</h2>
+            <p>Los datos personales que recabamos de usted, los utilizaremos para las siguientes finalidades que son necesarias para el servicio que solicita:</p>
+            <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>
+              <li>Procesamiento y envío de pedidos y productos adquiridos.</li>
+              <li>Facturación y cobro de nuestros productos.</li>
+              <li>Atención a clientes, aclaraciones y devoluciones.</li>
+            </ul>
+
+            <h2 style={{ marginTop: '2rem', color: '#1E293B', fontSize: '1.5rem', marginBottom: '1rem' }}>3. ¿Qué datos personales recabamos?</h2>
+            <p>Para llevar a cabo las finalidades descritas en el presente aviso de privacidad, utilizaremos los siguientes datos personales:</p>
+            <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>
+              <li>Nombre completo.</li>
+              <li>Teléfono de contacto.</li>
+              <li>Correo electrónico.</li>
+              <li>Dirección de envío (Calle, Colonia, Ciudad, Estado, Código Postal).</li>
+            </ul>
+
+            <h2 style={{ marginTop: '2rem', color: '#1E293B', fontSize: '1.5rem', marginBottom: '1rem' }}>4. Transferencia de datos</h2>
+            <p>Le informamos que sus datos personales son compartidos únicamente con proveedores de servicios logísticos y de paquetería exclusivamente con el propósito de realizar el envío y entrega de sus pedidos.</p>
+
+            <h2 style={{ marginTop: '2rem', color: '#1E293B', fontSize: '1.5rem', marginBottom: '1rem' }}>5. Pasarelas de Pago</h2>
+            <p>El procesamiento de los pagos se realiza a través de plataformas de pago seguras de terceros (como Stripe). Nosotros no almacenamos ni procesamos información de tarjetas de crédito o débito en nuestros servidores.</p>
+
+            <h2 style={{ marginTop: '2rem', color: '#1E293B', fontSize: '1.5rem', marginBottom: '1rem' }}>6. ¿Cómo puede contactarnos?</h2>
+            <p>Si usted tiene alguna duda sobre el presente aviso de privacidad, puede contactarnos en nuestras redes sociales o medios de atención al cliente.</p>
+          </div>
+        </main>
+        
+        <footer className="main-footer" style={{ marginTop: 'auto' }}>
+          <div className="footer-bottom" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <p>&copy; {new Date().getFullYear()} UniformesPro.mx - Todos los derechos reservados.</p>
+          </div>
+        </footer>
+      </div>
+    );
+  }
+
   if (view === 'admin') {
     if (isAuthChecking) return <div className="loading-screen" style={{height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}><RotateCw className="spinner" /></div>;
     if (!adminUser) return <AdminLogin onLoginSuccess={() => fetchOrders()} onBack={() => setView('shop')} />;
@@ -1526,7 +1584,10 @@ function App() {
         </div>
         <div className="footer-bottom">
           <p>&copy; {new Date().getFullYear()} UniformesPro.mx - Todos los derechos reservados.</p>
-          <button className="admin-login-link" onClick={() => setView('admin')}>Acceso Administrador</button>
+          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+            <button className="admin-login-link" onClick={() => setView('privacy')}>Aviso de Privacidad</button>
+            <button className="admin-login-link" onClick={() => setView('admin')}>Acceso Administrador</button>
+          </div>
         </div>
       </footer>
 
